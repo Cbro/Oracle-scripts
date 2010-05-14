@@ -1,0 +1,11 @@
+-- Finding Problem Queries by Querying the V$SQLAREA
+select  b.username username,
+        a.disk_reads,
+        a.disk_reads / decode(a.executions, 0, 1, a.executions) rds_exec_ratio,
+        a.command_type,
+        a.sql_text Statement
+from    v$sqlarea a,
+        dba_users b
+where   a.PARSING_USER_ID = b.user_id
+and     a.disk_reads > 100000
+order by a.disk_reads desc;

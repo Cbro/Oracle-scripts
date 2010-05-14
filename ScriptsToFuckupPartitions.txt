@@ -1,0 +1,644 @@
+Connected to Oracle Database 10g Enterprise Edition Release 10.2.0.2.0 
+Connected as musicstation
+ 
+SQL> 
+SQL> alter table mka_event
+  2     add constraint ckc_id_mkcustevent check (ID >= 0);
+ 
+Table altered
+SQL> alter table mka_event
+  2     add constraint ckc_cust_mksession_custevent check (CUSTOMER_SESSION_ID is null or (CUSTOMER_SESSION_ID >= 0));
+ 
+Table altered
+SQL> alter table mka_event
+  2     add constraint ckc_event_mktype_id_custevent check (EVENT_TYPE_ID >= 0);
+ 
+Table altered
+SQL> alter table mka_event
+  2     add constraint ckc_mkservice_id_event check (SERVICE_ID >= 0);
+ 
+Table altered
+SQL> alter table mka_event
+  2     add constraint ckc_mkseverity_level_event check (SEVERITY_LEVEL in ('DEBUG','INFO','ERROR','WARNING','FATAL','OFF'));
+ 
+Table altered
+SQL> alter table mka_event
+  2     add constraint ckc_mkobject_count_custevent check (OBJECT_COUNT >= 0);
+ 
+Table altered
+SQL> alter table mka_event
+  2     add constraint ckc_mkvalue_count_custevent check (VALUE_COUNT >= 0);
+ 
+Table altered
+ 
+SQL> 
+SQL> create index CUST_mkEVENT_IDX on mka_event (CUSTOMER_SESSION_ID, ID)
+  2    pctfree 10
+  3    initrans 2
+  4    maxtrans 255
+  5    storage
+  6    (
+  7      initial 64K
+  8      minextents 1
+  9      maxextents unlimited
+ 10    );
+ 
+Index created
+SQL> create index EVENT_mkCUST_ID_IDX on mka_event (CUSTOMER_ID)
+  2    pctfree 10
+  3    initrans 2
+  4    maxtrans 255
+  5    storage
+  6    (
+  7      initial 64K
+  8      minextents 1
+  9      maxextents unlimited
+ 10    );
+ 
+create index EVENT_mkCUST_ID_IDX on mka_event (CUSTOMER_ID)
+  pctfree 10
+  initrans 2
+  maxtrans 255
+  storage
+  (
+    initial 64K
+    minextents 1
+    maxextents unlimited
+  )
+ 
+ORA-00904: "CUSTOMER_ID": invalid identifier
+ 
+SQL> 
+SQL> create index EVENT_mkCUST_SESSION_FK_IDX on mka_event (CUSTOMER_SESSION_ID)
+  2    pctfree 10
+  3    initrans 2
+  4    maxtrans 255
+  5    storage
+  6    (
+  7      initial 64K
+  8      minextents 1
+  9      maxextents unlimited
+ 10    );
+ 
+Index created
+SQL> create index EVENT_mkEVENT_TYPE_FK_IDX on mka_event (EVENT_TYPE_ID)
+  2    pctfree 10
+  3    initrans 2
+  4    maxtrans 255
+  5    storage
+  6    (
+  7      initial 64K
+  8      minextents 1
+  9      maxextents unlimited
+ 10    );
+ 
+Index created
+ 
+SQL> 
+SQL> create index EVENT_mkFINANCE_IDX on mka_event (SERVICE_ID, CUSTOMER_SESSION_ID, EVENT_TYPE_ID, CREATED)
+  2    pctfree 10
+  3    initrans 2
+  4    maxtrans 255
+  5    storage
+  6    (
+  7      initial 64K
+  8      minextents 1
+  9      maxextents unlimited
+ 10    );
+ 
+Index created
+SQL> create index EVENT_mkSERVICE_FK_IDX on mka_event (SERVICE_ID)
+  2    pctfree 10
+  3    initrans 2
+  4    maxtrans 255
+  5    storage
+  6    (
+  7      initial 64K
+  8      minextents 1
+  9      maxextents unlimited
+ 10    );
+ 
+Index created
+ 
+SQL> insert into mka_event select * from event;
+ 
+insert into mka_event select * from event
+ 
+ORA-00913: too many values
+ 
+SQL> insert into mka_event select * from event;
+ 
+insert into mka_event select * from event
+ 
+ORA-00913: too many values
+ 
+SQL> desc mka_event;
+Name                Type                        Nullable Default Comments 
+------------------- --------------------------- -------- ------- -------- 
+ID                  NUMBER(10)                           NULL             
+CUSTOMER_SESSION_ID NUMBER(10)                  Y        NULL             
+EVENT_TYPE_ID       NUMBER(10)                           NULL             
+SERVICE_ID          NUMBER(10)                           NULL             
+SEVERITY_LEVEL      VARCHAR2(8 CHAR)                     'INFO'           
+EXECUTION_THREAD    VARCHAR2(32 CHAR)           Y        NULL             
+SIM_IMSI            VARCHAR2(128 CHAR)          Y                         
+DEVICE_IMEI         VARCHAR2(128 CHAR)          Y                         
+OBJECT_COUNT        NUMBER(12)                           0                
+VALUE_COUNT         NUMBER(12)                           0                
+DESCRIPTION         VARCHAR2(256 CHAR)          Y        NULL             
+OCCURRED            TIMESTAMP(3) WITH TIME ZONE Y        SYSDATE          
+DATA_CLASSIFICATION NUMBER(10)                           400000           
+CREATED             TIMESTAMP(3)                         SYSDATE          
+INSERTED            TIMESTAMP(3)                         SYSDATE          
+MODIFIED            TIMESTAMP(3)                         SYSDATE          
+ 
+SQL> desc event
+Name                Type               Nullable Default Comments 
+------------------- ------------------ -------- ------- -------- 
+ID                  NUMBER(10)                  NULL             
+CUSTOMER_SESSION_ID NUMBER(10)         Y        NULL             
+EVENT_TYPE_ID       NUMBER(10)                  NULL             
+SERVICE_ID          NUMBER(10)                  NULL             
+CUSTOMER_ID         NUMBER(10)         Y        NULL             
+SEVERITY_LEVEL      VARCHAR2(8 CHAR)            'INFO'           
+EXECUTION_THREAD    VARCHAR2(32 CHAR)  Y        NULL             
+SIM_IMSI            VARCHAR2(128 CHAR) Y                         
+DEVICE_IMEI         VARCHAR2(128 CHAR) Y                         
+OBJECT_COUNT        NUMBER(12)                  0                
+VALUE_COUNT         NUMBER(12)                  0                
+DESCRIPTION         VARCHAR2(256 CHAR) Y        NULL             
+OCCURRED            TIMESTAMP(3)       Y        SYSDATE          
+DATA_CLASSIFICATION NUMBER(10)                  400000           
+CREATED             TIMESTAMP(3)                SYSDATE          
+INSERTED            TIMESTAMP(3)                SYSDATE          
+MODIFIED            TIMESTAMP(3)                SYSDATE          
+ 
+SQL> drop table mka_event;
+ 
+Table dropped
+ 
+SQL> 
+SQL> -- Temp test table for partitioning
+SQL> create table mka_event  (
+  2     id                   NUMBER(10)                     default NULL not null,
+  3     customer_session_id  NUMBER(10)                     default NULL,
+  4     event_type_id        NUMBER(10)                     default NULL not null,
+  5     service_id           NUMBER(10)                     default NULL not null,
+  6     CUSTOMER_ID          NUMBER(10)                     default NULL,
+  7     severity_level       VARCHAR2(8 CHAR)               default 'INFO' not null,
+  8     execution_thread     VARCHAR2(32 CHAR)              default NULL,
+  9     sim_imsi             VARCHAR2(128 CHAR),
+ 10     device_imei          VARCHAR2(128 CHAR),
+ 11     object_count         NUMBER(12)                     default 0 not null,
+ 12     value_count          NUMBER(12)                     default 0 not null,
+ 13     description          VARCHAR2(256 CHAR)             default NULL,
+ 14     occurred             TIMESTAMP(3) WITH TIME ZONE    default SYSDATE,
+ 15     data_classification  NUMBER(10)                     default 400000 not null,
+ 16     created              TIMESTAMP(3)                   default SYSDATE not null,
+ 17     inserted             TIMESTAMP(3)                   default SYSDATE not null,
+ 18     modified             TIMESTAMP(3)                   default SYSDATE not null,
+ 19     constraint pk_mka_event primary key (id)
+ 20  )
+ 21    partition by range
+ 22   ( CREATED  )
+ 23      (
+ 24    partition
+ 25              event_par_0607
+ 26              values less than ( TIMESTAMP'2007-07-01 00:00:00'  ),
+ 27    partition
+ 28              event_par_0707
+ 29              values less than ( TIMESTAMP'2007-08-01 00:00:00'  ),
+ 30    partition
+ 31               event_par_0807
+ 32              values less than ( TIMESTAMP'2007-09-01 00:00:00'  ),
+ 33    partition
+ 34               event_par_0907
+ 35              values less than ( TIMESTAMP'2007-10-01 00:00:00'  ),
+ 36    partition
+ 37               event_par_curr
+ 38              values less than ( TIMESTAMP'2008-08-01 00:00:00'  )
+ 39      );
+ 
+Table created
+ 
+SQL> 
+SQL> alter table mka_event
+  2     add constraint ckc_id_mkcustevent check (ID >= 0);
+ 
+Table altered
+SQL> alter table mka_event
+  2     add constraint ckc_cust_mksession_custevent check (CUSTOMER_SESSION_ID is null or (CUSTOMER_SESSION_ID >= 0));
+ 
+Table altered
+SQL> alter table mka_event
+  2     add constraint ckc_event_mktype_id_custevent check (EVENT_TYPE_ID >= 0);
+ 
+Table altered
+SQL> alter table mka_event
+  2     add constraint ckc_mkservice_id_event check (SERVICE_ID >= 0);
+ 
+Table altered
+SQL> alter table mka_event
+  2     add constraint ckc_mkseverity_level_event check (SEVERITY_LEVEL in ('DEBUG','INFO','ERROR','WARNING','FATAL','OFF'));
+ 
+Table altered
+SQL> alter table mka_event
+  2     add constraint ckc_mkobject_count_custevent check (OBJECT_COUNT >= 0);
+ 
+Table altered
+SQL> alter table mka_event
+  2     add constraint ckc_mkvalue_count_custevent check (VALUE_COUNT >= 0);
+ 
+Table altered
+ 
+SQL> 
+SQL> create index EVENT_mkCUST_ID_IDX on mka_event (CUSTOMER_ID)
+  2    pctfree 10
+  3    initrans 2
+  4    maxtrans 255
+  5    storage
+  6    (
+  7      initial 64K
+  8      minextents 1
+  9      maxextents unlimited
+ 10    );
+ 
+Index created
+ 
+SQL> 
+SQL> create index EVENT_mkFINANCE_IDX on mka_event (SERVICE_ID, CUSTOMER_SESSION_ID, EVENT_TYPE_ID, CREATED)
+  2    pctfree 10
+  3    initrans 2
+  4    maxtrans 255
+  5    storage
+  6    (
+  7      initial 64K
+  8      minextents 1
+  9      maxextents unlimited
+ 10    );
+ 
+Index created
+SQL> create index EVENT_mkSERVICE_FK_IDX on mka_event (SERVICE_ID)
+  2    pctfree 10
+  3    initrans 2
+  4    maxtrans 255
+  5    storage
+  6    (
+  7      initial 64K
+  8      minextents 1
+  9      maxextents unlimited
+ 10    );
+ 
+Index created
+ 
+SQL> 
+SQL> create index EVENT_mkCUST_SESSION_FK_IDX on mka_event (CUSTOMER_SESSION_ID)
+  2    pctfree 10
+  3    initrans 2
+  4    maxtrans 255
+  5    storage
+  6    (
+  7      initial 64K
+  8      minextents 1
+  9      maxextents unlimited
+ 10    );
+ 
+Index created
+SQL> create index EVENT_mkEVENT_TYPE_FK_IDX on mka_event (EVENT_TYPE_ID)
+  2    pctfree 10
+  3    initrans 2
+  4    maxtrans 255
+  5    storage
+  6    (
+  7      initial 64K
+  8      minextents 1
+  9      maxextents unlimited
+ 10    );
+ 
+Index created
+ 
+SQL> 
+SQL> create index CUST_mkEVENT_IDX on mka_event (CUSTOMER_SESSION_ID, ID)
+  2    pctfree 10
+  3    initrans 2
+  4    maxtrans 255
+  5    storage
+  6    (
+  7      initial 64K
+  8      minextents 1
+  9      maxextents unlimited
+ 10    );
+ 
+Index created
+ 
+SQL> desc mka_event
+Name                Type                        Nullable Default Comments 
+------------------- --------------------------- -------- ------- -------- 
+ID                  NUMBER(10)                           NULL             
+CUSTOMER_SESSION_ID NUMBER(10)                  Y        NULL             
+EVENT_TYPE_ID       NUMBER(10)                           NULL             
+SERVICE_ID          NUMBER(10)                           NULL             
+CUSTOMER_ID         NUMBER(10)                  Y        NULL             
+SEVERITY_LEVEL      VARCHAR2(8 CHAR)                     'INFO'           
+EXECUTION_THREAD    VARCHAR2(32 CHAR)           Y        NULL             
+SIM_IMSI            VARCHAR2(128 CHAR)          Y                         
+DEVICE_IMEI         VARCHAR2(128 CHAR)          Y                         
+OBJECT_COUNT        NUMBER(12)                           0                
+VALUE_COUNT         NUMBER(12)                           0                
+DESCRIPTION         VARCHAR2(256 CHAR)          Y        NULL             
+OCCURRED            TIMESTAMP(3) WITH TIME ZONE Y        SYSDATE          
+DATA_CLASSIFICATION NUMBER(10)                           400000           
+CREATED             TIMESTAMP(3)                         SYSDATE          
+INSERTED            TIMESTAMP(3)                         SYSDATE          
+MODIFIED            TIMESTAMP(3)                         SYSDATE          
+ 
+SQL> select count(*) from mka_event partition (EVENT_PAR_0607);
+ 
+  COUNT(*)
+----------
+         0
+ 
+SQL> select count(*) from mka_event partition (EVENT_PAR_0707);
+ 
+  COUNT(*)
+----------
+         0
+ 
+SQL> select count(*) from mka_event partition (EVENT_PAR_0807);
+ 
+  COUNT(*)
+----------
+         0
+ 
+SQL> select count(*) from mka_event partition (EVENT_PAR_0907);
+ 
+  COUNT(*)
+----------
+         0
+ 
+SQL> select count(*) from mka_event partition (EVENT_PAR_CURR);
+ 
+  COUNT(*)
+----------
+         0
+ 
+SQL> 
+SQL> insert into mka_event select * from event;
+ 
+495371 rows inserted
+ 
+SQL> select count(*) from mka_event partition (EVENT_PAR_0607);
+ 
+  COUNT(*)
+----------
+         0
+ 
+SQL> select count(*) from mka_event partition (EVENT_PAR_0707);
+ 
+  COUNT(*)
+----------
+         0
+ 
+SQL> select count(*) from mka_event partition (EVENT_PAR_0807);
+ 
+  COUNT(*)
+----------
+         0
+ 
+SQL> select count(*) from mka_event partition (EVENT_PAR_0907);
+ 
+  COUNT(*)
+----------
+     11099
+ 
+SQL> select count(*) from mka_event partition (EVENT_PAR_CURR);
+ 
+  COUNT(*)
+----------
+    484272
+ 
+SQL> create table mka_event_bkup as select * from mka_event partition (EVENT_PAR_CURR);
+ 
+Table created
+ 
+SQL> select count(*) from mka_event_bkup;
+ 
+  COUNT(*)
+----------
+    484272
+ 
+SQL> delete from mka_event partition (EVENT_PAR_CURR);                                                                                                                                                  
+SQL> 
+SQL> 
+SQL> 
+ 
+484272 rows deleted
+ 
+SQL> alter table mka_event drop partition EVENT_PAR_CURR;
+ 
+Table altered
+ 
+SQL> 
+SQL> ALTER TABLE mka_event
+  2        ADD PARTITION event_par_curr values less than ( TIMESTAMP'2008-08-01 00:00:00'  ) ;
+ 
+Table altered
+ 
+SQL> insert into mka_event partition (EVENT_PAR_CURR) select * from mka_event_bkup;
+ 
+484272 rows inserted
+ 
+SQL> commit;
+ 
+Commit complete
+ 
+SQL> select count(*) from mka_event partition (EVENT_PAR_CURR);
+ 
+  COUNT(*)
+----------
+    484272
+ 
+SQL> insert into mka_event_bkup;
+ 
+insert into mka_event_bkup
+ 
+ORA-00926: missing VALUES keyword
+ 
+SQL> select count(*) from mka_event_bkup;
+ 
+  COUNT(*)
+----------
+    484272
+ 
+SQL> alter table mka_event drop partition EVENT_PAR_CURR;
+ 
+Table altered
+ 
+SQL> alter index cust_mkevent_idx rebuild;
+ 
+Index altered
+ 
+SQL> alter index event_mkcust_id_idx rebuild;
+ 
+Index altered
+ 
+SQL> alter index event_mkcust_session_fk_idx rebuild;
+ 
+Index altered
+ 
+SQL> alter index event_mkevent_type_fk_idx rebuild;
+ 
+Index altered
+ 
+SQL> alter index event_mkfinance_idx rebuild;
+ 
+Index altered
+ 
+SQL> alter index event_mkservice_fk_idx rebuild;
+ 
+Index altered
+ 
+SQL> alter index pk_mka_event rebuild;
+ 
+Index altered
+ 
+SQL> 
+SQL> ALTER TABLE mka_event
+  2        ADD PARTITION event_par_curr values less than ( TIMESTAMP'2008-08-01 00:00:00'  ) ;
+ 
+Table altered
+ 
+SQL> 
+SQL> insert into mka_event partition (EVENT_PAR_CURR) select * from mka_event_bkup;
+ 
+484272 rows inserted
+ 
+SQL> commit;
+ 
+Commit complete
+ 
+SQL> alter table mka_event drop partition EVENT_PAR_CURR update global indexes;
+ 
+Table altered
+ 
+SQL> select count(*) from mka_event_bkup;
+SQL> ALTER TABLE mka_event
+  2        ADD PARTITION event_par_curr values less than ( TIMESTAMP'2008-08-01 00:00:00'  ) ;
+  
+ 
+Table altered
+ 
+SQL> 
+SQL> insert into mka_event partition (EVENT_PAR_CURR) select * from mka_event_bkup; commit;
+ 
+insert into mka_event partition (EVENT_PAR_CURR) select * from mka_event_bkup; commit
+ 
+ORA-00911: invalid character
+ 
+SQL> insert into mka_event partition (EVENT_PAR_CURR) select * from mka_event_bkup;
+ 
+484272 rows inserted
+ 
+SQL> commit;
+ 
+Commit complete
+ 
+SQL> create table mka_event_par_curr as select * from event where 1=0;
+ 
+Table created
+ 
+SQL> desc mka_event_par_curr;
+Name                Type               Nullable Default Comments 
+------------------- ------------------ -------- ------- -------- 
+ID                  NUMBER(10)                                   
+CUSTOMER_SESSION_ID NUMBER(10)         Y                         
+EVENT_TYPE_ID       NUMBER(10)                                   
+SERVICE_ID          NUMBER(10)                                   
+CUSTOMER_ID         NUMBER(10)         Y                         
+SEVERITY_LEVEL      VARCHAR2(8 CHAR)                             
+EXECUTION_THREAD    VARCHAR2(32 CHAR)  Y                         
+SIM_IMSI            VARCHAR2(128 CHAR) Y                         
+DEVICE_IMEI         VARCHAR2(128 CHAR) Y                         
+OBJECT_COUNT        NUMBER(12)                                   
+VALUE_COUNT         NUMBER(12)                                   
+DESCRIPTION         VARCHAR2(256 CHAR) Y                         
+OCCURRED            TIMESTAMP(3)       Y                         
+DATA_CLASSIFICATION NUMBER(10)                                   
+CREATED             TIMESTAMP(3)                                 
+INSERTED            TIMESTAMP(3)                                 
+MODIFIED            TIMESTAMP(3)                                 
+ 
+SQL> select count(*) from mka_event partition (EVENT_PAR_CURR);
+ 
+  COUNT(*)
+----------
+    484272
+ 
+SQL> select count(*) from mka_event_bkup;
+ 
+  COUNT(*)
+----------
+    484272
+ 
+SQL> select count(*) from mka_event_par_curr;
+ 
+  COUNT(*)
+----------
+         0
+ 
+SQL> alter table mka_event exchange partition EVENT_PAR_CURR with mka_event_par_curr update global indexes;
+ 
+alter table mka_event exchange partition EVENT_PAR_CURR with mka_event_par_curr update global indexes
+ 
+ORA-00966: missing TABLE keyword
+ 
+SQL> alter table mka_event exchange partition EVENT_PAR_CURR with mka_event_par_curr ;
+ 
+alter table mka_event exchange partition EVENT_PAR_CURR with mka_event_par_curr
+ 
+ORA-00966: missing TABLE keyword
+ 
+SQL> alter table mka_event exchange partition EVENT_PAR_CURR with mka_event_par_curr update global indexes;
+ 
+alter table mka_event exchange partition EVENT_PAR_CURR with mka_event_par_curr update global indexes
+ 
+ORA-00966: missing TABLE keyword
+ 
+SQL> alter table mka_event exchange partition EVENT_PAR_CURR with mka_event_par_curr ;
+ 
+alter table mka_event exchange partition EVENT_PAR_CURR with mka_event_par_curr
+ 
+ORA-00966: missing TABLE keyword
+ 
+SQL> alter table mka_event exchange partition EVENT_PAR_CURR with table mka_event_par_curr update global indexes;
+ 
+alter table mka_event exchange partition EVENT_PAR_CURR with table mka_event_par_curr update global indexes
+ 
+ORA-14097: column type or size mismatch in ALTER TABLE EXCHANGE PARTITION
+ 
+SQL> drop table mka_event_par_curr;
+ 
+Table dropped
+ 
+SQL> create table mka_event_par_curr as select * from mka_event where 1=0;
+ 
+Table created
+ 
+SQL> alter table mka_event exchange partition EVENT_PAR_CURR with table mka_event_par_curr update global indexes;
+ 
+Table altered
+ 
+SQL> select count(*) from mka_event_par_curr;
+Warning: connection was lost and re-established
+ 
+  COUNT(*)
+----------
+    484272
+ 
+SQL> select count(*) from  mka_event partition (EVENT_PAR_CURR);
+ 
+  COUNT(*)
+----------
+         0
+ 
+SQL> 

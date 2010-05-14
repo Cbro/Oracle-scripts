@@ -1,0 +1,105 @@
+Ok continuing, 
+
+Steps for the import --
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+RECREATE THE EXACT SAME DUMP DIRECTORY IN THE TARGET DATABASE (ensure that the directory name is always a fixed name à “dmpdir”)
+1.	Log into your database with SYSTEM privileges à sqlplus SYSTEM/password;
+	
+	-- Variable Parameters
+	Password – The SYSTEM password on the target database
+
+2.	Create an Oracle Directory pointing to a directory in the file system to place the dump in. In my case - C:\oraclexe\datadump
+        CREATE OR REPLACE DIRECTORY dmpdir AS ‘C:\oraclexe\datadump'; 
+        GRANT READ, WRITE ON DIRECTORY dmpdir TO system;
+	
+	-- Variable Parameters
+	C:\oraclexe\datadump – The local file-system directory where the target users download and place the .dmp file
+
+DROP THE TARGET SCHEMA (In my example à musicstation_new)
+3.	Drop the entire schema on the target database. Everything associated to this user will be dropped!
+	DROP USER musicstation_new CASCADE;
+
+IMPORT THE EXPORTED SCHEMA INTO YOUR DATABASE – CREATES NEW USER, GETS ALL GRANTS OVER AND IMPORTS DATA!
+4.	Import command as follows: 
+impdp SYSTEM/password SCHEMAS=musicstation DIRECTORY=dmpdir DUMPFILE=musicstation.dmp REMAP_SCHEMA=musicstation:musicstation_new TABLE_EXISTS_ACTION=replace	LOGFILE=import.log
+	
+	-- Variable Parameters
+	1. Password 	 	– The SYSTEM password on the target database
+	2. Musicstation 	– The source schema/user name of the schema that was exported and is in the .dmp file
+	3. Musicstation_new 	– The target schema name into which the data should be imported to on the target database.
+	4. import.log		- The name of the import log file
+
+ASSIGN A PASSWORD TO THE NEWLY/RECREATED SCHEMA/USER
+5.	User Password creation command as follows: 
+	ALTER USER musicstation_new IDENTIFIED BY password;
+
+	-- Variable Parameters
+	1. musicstation_new 	– The new or re-created target schema/user
+	2. password		- The new or re-created target user’s password. This can be stored in the Ant task and substituted. 
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Hope you can get this working now. Let me know if you have any troubles and if you need any assistance in testing out the process. Remap also works fine if the source and target schema names are exactly the same! 
+
+Cheers,
+Manu
+
+
+
+	
+
+
+
+Manu Kaul
+Database Architect
+
+Omnifone
+Island Studios
+47 British Grove
+London W4 2NL, UK
+M +44 (0)7900 021 738
+T +44 (0)20 8600 0580
+F +44 (0)20 8600 0581
+E mkaul@omnifone.com
+W www.omnifone.com
+ 
+From: Manu Kaul 
+Sent: 08 August 2008 17:48
+To: Tom Boswell
+Subject: Export with datapump
+
+Tom,
+
+Steps for an export that can later be used.
+
+6.	Log into your database with SYSTEM privileges à sqlplus SYSTEM/password
+7.	Create an Oracle Directory pointing to a directory in the file system to place the dump in. In my case - C:\oraclexe\datadump
+        CREATE OR REPLACE DIRECTORY dmpdir AS C:\oraclexe\datadump'; 
+        GRANT READ,WRITE ON DIRECTORY dmpdir TO system;
+
+8.	Issue the data-pump command to export the database schema “musicstation” as a .dmp file 
+     expdp SYSTEM/password SCHEMAS=musicstation DIRECTORY=dmpdir DUMPFILE=musicstation.dmp
+
+The export is fairly straightforward. Steps 1 and 2 are once off processes that will not need to be part of your script. We might have to grant more privileges later down the track to the directory if there are other schemas we wish to export. I will send you the steps for import early Monday. Hope this is ok to build the Ant infrastructure around. 
+
+Inputs would have to be 
+1.	The dump directory on your CI server.
+2.	The schema name to dump out
+
+The rest as you said should be evident by the way CI server lays out things.
+
+Cheers,
+
+Manu Kaul
+Database Architect
+
+Omnifone
+Island Studios
+47 British Grove
+London W4 2NL, UK
+M +44 (0)7900 021 738
+T +44 (0)20 8600 0580
+F +44 (0)20 8600 0581
+E mkaul@omnifone.com
+W www.omnifone.com
+

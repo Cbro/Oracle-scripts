@@ -1,0 +1,338 @@
+-- Drop the M-View
+drop materialized view mv_aged_artist_cnt_forever;
+
+-- Re-Create M-view
+create materialized view MV_AGED_ARTIST_CNT_FOREVER
+on prebuilt table with reduced precision 
+enable query rewrite
+as
+select a.id                                         artist_id,
+       acl.service_id                               service_id,
+       a.primary_genre_id                           primary_genre_id,
+       sum(acl.play_count)                          play_count,
+       count(acl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   artist_count_live_aday acl,
+       artist a
+where  acl.artist_id     = a.id
+and    acl.period_kind   = 'DAY'
+group by a.id, acl.service_id, a.primary_genre_id;
+
+
+-- Change refresh times
+alter materialized view MV_AGED_ARTIST_CNT_FOREVER 
+refresh fast start with sysdate next trunc(sysdate+1) + 5/24;
+
+-- Complete Refresh
+exec dbms_mview.refresh('MV_AGED_ARTIST_CNT_FOREVER','C');
+
+
+
+
+
+
+
+
+
+-- Drop the M-view
+drop materialized view mv_aged_customer_cnt_forever;
+
+-- Recreate the Mview
+create materialized view MV_AGED_CUSTOMER_CNT_FOREVER
+on prebuilt table with reduced precision 
+enable query rewrite
+as
+select c.id                                         customer_id,
+       c.service_id                                 service_id,
+       sum(ccl.play_count_myplaylist_other)                          play_count_myplaylist_other,
+       count(ccl.play_count_myplaylist_other)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   customer_count_live_aday ccl,
+       customer c
+where  ccl.customer_id     = c.id
+and    ccl.period_kind   = 'DAY'
+group by c.id, c.service_id;
+
+-- Change refresh times
+alter materialized view MV_AGED_CUSTOMER_CNT_FOREVER 
+refresh fast start with sysdate next trunc(sysdate+1) + 5/24;
+
+-- Complete Refresh
+exec dbms_mview.refresh('MV_AGED_CUSTOMER_CNT_FOREVER','C');
+
+
+
+
+
+
+-- Drop the M-view
+drop materialized view MV_AGED_PLAYLIST_CNT_FOREVER;
+
+-- Recreate M-view
+create materialized view MV_AGED_PLAYLIST_CNT_FOREVER
+on prebuilt table with reduced precision 
+enable query rewrite
+as
+select c.id                                         playlist_id,
+       c.service_id                                 service_id,
+       sum(ccl.play_count)                          play_count,
+       count(ccl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   playlist_count_live_aday ccl,
+       playlist c
+where  ccl.playlist_id     = c.id
+and    ccl.period_kind   = 'DAY'
+group by c.id, c.service_id;
+
+
+-- Change refresh times
+alter materialized view MV_AGED_PLAYLIST_CNT_FOREVER 
+refresh fast start with sysdate next trunc(sysdate+1) + 5/24;
+
+-- Complete Refresh
+exec dbms_mview.refresh('MV_AGED_PLAYLIST_CNT_FOREVER','C');
+
+
+
+
+
+
+
+
+
+-- Drop the M-view
+drop materialized view MV_AGED_TRACK_CNT_FOREVER;
+
+-- Recreate M-view
+create materialized view MV_AGED_TRACK_CNT_FOREVER
+on prebuilt table with reduced precision 
+enable query rewrite
+as
+select t.id                                         track_id,
+       tcl.service_id                               service_id,
+       nvl(t.primary_genre_id, r.primary_genre_id)  primary_genre_id,
+       sum(tcl.play_count)                          play_count,
+       count(tcl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   track_count_live_aday tcl,
+       track t,
+       release r
+where  tcl.track_id     = t.id
+and    t.release_id     = r.id
+and    tcl.period_kind  = 'DAY'
+group by t.id, tcl.service_id, nvl(t.primary_genre_id, r.primary_genre_id);
+
+-- Change refresh times
+alter materialized view MV_AGED_TRACK_CNT_FOREVER 
+refresh fast start with sysdate next trunc(sysdate+1) + 5/24;
+
+-- Complete Refresh
+exec dbms_mview.refresh('MV_AGED_TRACK_CNT_FOREVER','C');
+
+
+
+------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+-- Drop the M-view
+drop materialized view MV_CURR_ARTIST_CNT_FOREVER;
+
+-- Recreate M-view
+create materialized view MV_CURR_ARTIST_CNT_FOREVER
+on prebuilt table with reduced precision 
+enable query rewrite
+as
+select a.id                                         artist_id,
+       acl.service_id                               service_id,
+       a.primary_genre_id                           primary_genre_id,
+       sum(acl.play_count)                          play_count,
+       count(acl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   artist_count_live acl,
+       artist a
+where  acl.artist_id     = a.id
+and    acl.period_kind   = 'DAY'
+group by a.id, acl.service_id, a.primary_genre_id;
+
+-- Change refresh times
+alter materialized view MV_CURR_ARTIST_CNT_FOREVER 
+refresh fast start with sysdate next trunc(sysdate+1) + 6/24;
+
+
+-- Complete Refresh
+exec dbms_mview.refresh('MV_CURR_ARTIST_CNT_FOREVER','C');
+
+
+
+
+
+
+
+
+
+-- Drop the M-view
+drop materialized view MV_CURR_CUSTOMER_CNT_FOREVER;
+
+-- Recreate M-view
+create materialized view MV_CURR_CUSTOMER_CNT_FOREVER
+on prebuilt table with reduced precision 
+enable query rewrite
+as
+select c.id                                         customer_id,
+       c.service_id                                 service_id,
+       sum(ccl.play_count_myplaylist_other)         play_count_myplaylist_other,
+       count(ccl.play_count_myplaylist_other)       mv_count_1,
+       count(*)                                     mv_count_2
+from   customer_count_live ccl,
+       customer c
+where  ccl.customer_id     = c.id
+and    ccl.period_kind   = 'DAY'
+group by c.id, c.service_id;
+
+-- Change refresh times
+alter materialized view MV_CURR_CUSTOMER_CNT_FOREVER 
+refresh fast start with sysdate next trunc(sysdate+1) + 6/24;
+
+-- Complete Refresh
+exec dbms_mview.refresh('MV_CURR_CUSTOMER_CNT_FOREVER','C');
+
+
+
+
+
+
+-- Drop the M-view
+drop materialized view MV_CURR_PLAYLIST_CNT_FOREVER;
+
+-- Recreate M-view
+create materialized view MV_CURR_PLAYLIST_CNT_FOREVER
+on prebuilt table with reduced precision 
+enable query rewrite
+as
+select p.id                                         playlist_id,
+       p.service_id                                 service_id,
+       sum(pcl.play_count)                          play_count,
+       count(pcl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   playlist_count_live pcl,
+       playlist p
+where  pcl.playlist_id = p.id
+and    pcl.period_kind     = 'DAY'
+group by p.id, p.service_id;
+
+-- Change refresh times
+alter materialized view MV_CURR_PLAYLIST_CNT_FOREVER 
+refresh fast start with sysdate next trunc(sysdate+1) + 6/24;
+
+
+-- Complete Refresh
+exec dbms_mview.refresh('MV_CURR_PLAYLIST_CNT_FOREVER','C');
+
+
+
+
+
+
+
+-- Drop the M-view
+drop materialized view MV_CURR_TRACK_CNT_FOREVER;
+
+-- Recreate M-view
+create materialized view MV_CURR_TRACK_CNT_FOREVER
+on prebuilt table with reduced precision 
+enable query rewrite
+as
+select t.id                                         track_id,
+       tcl.service_id                               service_id,
+       nvl(t.primary_genre_id, r.primary_genre_id)  primary_genre_id,
+       sum(tcl.play_count)                          play_count,
+       count(tcl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   track_count_live tcl,
+       track t,
+       release r
+where  tcl.track_id     = t.id
+and    t.release_id     = r.id
+and    tcl.period_kind  = 'DAY'
+group by t.id, tcl.service_id, nvl(t.primary_genre_id, r.primary_genre_id);
+
+
+-- Change refresh times
+alter materialized view MV_CURR_TRACK_CNT_FOREVER 
+refresh fast start with sysdate next trunc(sysdate+1) + 6/24;
+
+-- Complete Refresh
+exec dbms_mview.refresh('MV_CURR_TRACK_CNT_FOREVER','C');
+
+
+
+
+
+
+-- Monitor the M-View
+select mview_name, 
+  refresh_mode, 
+  refresh_method,
+       last_refresh_type, 
+  last_refresh_date
+from   user_mviews;
+
+
+exec dbms_mview.explain_mview('MV_CURR_TRACK_CNT_FOREVER');
+ 
+PL/SQL procedure successfully completed
+ 
+SQL> select * from mv_capabilities_table;
+ 
+STATEMENT_ID                   MVOWNER                        MVNAME                         CAPABILITY_NAME                POSSIBLE RELATED_TEXT                                                                     RELATED_NUM                                   MSGNO MSGTXT                                                                                  SEQ
+------------------------------ ------------------------------ ------------------------------ ------------------------------ -------- -------------------------------------------------------------------------------- ----------- --------------------------------------- -------------------------------------------------------------------------------- ----------
+                               MUSICSTATION                   MV_CURR_ARTIST_CNT_FOREVER     PCT                            N                                                                                                                                                                                                                                       1
+                               MUSICSTATION                   MV_CURR_ARTIST_CNT_FOREVER     REFRESH_COMPLETE               Y                                                                                                                                                                                                                                    1002
+                               MUSICSTATION                   MV_CURR_ARTIST_CNT_FOREVER     REFRESH_FAST                   Y                                                                                                                                                                                                                                    2003
+                               MUSICSTATION                   MV_CURR_ARTIST_CNT_FOREVER     REWRITE                        Y                                                                                                                                                                                                                                    3004
+                               MUSICSTATION                   MV_CURR_ARTIST_CNT_FOREVER     PCT_TABLE                      N        ARTIST_COUNT_LIVE                                                                        395                                    2068 relation is not a partitioned table                                                    4005
+                               MUSICSTATION                   MV_CURR_ARTIST_CNT_FOREVER     PCT_TABLE                      N        ARTIST                                                                                   425                                    2068 relation is not a partitioned table                                                    4006
+                               MUSICSTATION                   MV_CURR_ARTIST_CNT_FOREVER     REFRESH_FAST_AFTER_INSERT      Y                                                                                                                                                                                                                                    5007
+                               MUSICSTATION                   MV_CURR_ARTIST_CNT_FOREVER     REFRESH_FAST_AFTER_ONETAB_DML  Y                                                                                                                                                                                                                                    6008
+                               MUSICSTATION                   MV_CURR_ARTIST_CNT_FOREVER     REFRESH_FAST_AFTER_ANY_DML     Y                                                                                                                                                                                                                                    7009
+                               MUSICSTATION                   MV_CURR_ARTIST_CNT_FOREVER     REFRESH_FAST_PCT               N                                                                                                                                        2157 PCT is not possible on any of the detail tables in the materialized view               8010
+                               MUSICSTATION                   MV_CURR_ARTIST_CNT_FOREVER     REWRITE_FULL_TEXT_MATCH        Y                                                                                                                                                                                                                                    9011
+                               MUSICSTATION                   MV_CURR_ARTIST_CNT_FOREVER     REWRITE_PARTIAL_TEXT_MATCH     Y                                                                                                                                                                                                                                   10012
+                               MUSICSTATION                   MV_CURR_ARTIST_CNT_FOREVER     REWRITE_GENERAL                Y                                                                                                                                                                                                                                   11013
+                               MUSICSTATION                   MV_CURR_ARTIST_CNT_FOREVER     REWRITE_PCT                    N                                                                                                                                        2158 general rewrite is not possible or PCT is not possible on any of the detail tabl      12014
+                               MUSICSTATION                   MV_CURR_ARTIST_CNT_FOREVER     PCT_TABLE_REWRITE              N        ARTIST_COUNT_LIVE                                                                        395                                    2068 relation is not a partitioned table                                                   13015
+                               MUSICSTATION                   MV_CURR_ARTIST_CNT_FOREVER     PCT_TABLE_REWRITE              N        ARTIST                                                                                   425                                    2068 relation is not a partitioned table                                                   13016
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      PCT                            N                                                                                                                                                                                                                                       1
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      REFRESH_COMPLETE               Y                                                                                                                                                                                                                                    1002
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      REFRESH_FAST                   Y                                                                                                                                                                                                                                    2003
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      REWRITE                        Y                                                                                                                                                                                                                                    3004
+ 
+STATEMENT_ID                   MVOWNER                        MVNAME                         CAPABILITY_NAME                POSSIBLE RELATED_TEXT                                                                     RELATED_NUM                                   MSGNO MSGTXT                                                                                  SEQ
+------------------------------ ------------------------------ ------------------------------ ------------------------------ -------- -------------------------------------------------------------------------------- ----------- --------------------------------------- -------------------------------------------------------------------------------- ----------
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      PCT_TABLE                      N        TRACK_COUNT_LIVE                                                                         394                                    2068 relation is not a partitioned table                                                    4005
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      PCT_TABLE                      N        TRACK                                                                                    423                                    2070 PCT not supported with this type of partitioning                                       4006
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      PCT_TABLE                      N        RELEASE                                                                                  439                                    2068 relation is not a partitioned table                                                    4007
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      REFRESH_FAST_AFTER_INSERT      Y                                                                                                                                                                                                                                    5008
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      REFRESH_FAST_AFTER_ONETAB_DML  Y                                                                                                                                                                                                                                    6009
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      REFRESH_FAST_AFTER_ANY_DML     Y                                                                                                                                                                                                                                    7010
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      REFRESH_FAST_PCT               N                                                                                                                                        2157 PCT is not possible on any of the detail tables in the materialized view               8011
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      REWRITE_FULL_TEXT_MATCH        Y                                                                                                                                                                                                                                    9012
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      REWRITE_PARTIAL_TEXT_MATCH     Y                                                                                                                                                                                                                                   10013
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      REWRITE_GENERAL                Y                                                                                                                                                                                                                                   11014
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      REWRITE_PCT                    N                                                                                                                                        2158 general rewrite is not possible or PCT is not possible on any of the detail tabl      12015
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      PCT_TABLE_REWRITE              N        TRACK_COUNT_LIVE                                                                         394                                    2068 relation is not a partitioned table                                                   13016
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      PCT_TABLE_REWRITE              N        TRACK                                                                                    423                                    2070 PCT not supported with this type of partitioning                                      13017
+                               MUSICSTATION                   MV_CURR_TRACK_CNT_FOREVER      PCT_TABLE_REWRITE              N        RELEASE                                                                                  439                                    2068 relation is not a partitioned table                                                   13018
+ 
+34 rows selected
+ 
+SQL> 
+
+

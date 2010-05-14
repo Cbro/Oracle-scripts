@@ -1,0 +1,87 @@
+Disable:
+
+set feedback off
+set verify off
+set echo off
+prompt Finding constraints to disable...
+set termout off
+set pages 80
+set heading off
+set linesize 120
+spool tmp_disable.sql
+select 'spool igen_disable.log;' from dual;
+select 'ALTER TABLE '||substr(c.table_name,1,35)||
+' DISABLE CONSTRAINT '||constraint_name||' ;'
+from user_constraints c, user_tables u
+where c.table_name = u.table_name;
+select 'exit;' from dual;
+set termout on
+prompt Disabling constraints now...
+set termout off
+@tmp_disable.sql;
+exit
+/
+
+
+Enable:
+
+set feedback off
+set verify off
+set wrap off
+set echo off
+prompt Finding constraints to enable...
+set termout off
+set lines 120
+set heading off
+spool tmp_enable.sql
+select 'spool igen_enable.log;' from dual;
+select 'ALTER TABLE '||substr(c.table_name,1,35)||
+' ENABLE CONSTRAINT '||constraint_name||' ;'
+from user_constraints c, user_tables u
+where c.table_name = u.table_name;
+/
+select 'exit;' from dual;
+set termout on
+prompt Enabling constraints now...
+set termout off
+@tmp_enable;
+!rm -i tmp_enable.sql;
+exit
+/
+
+
+
+PL/SQL way
+BEGIN
+    FOR x IN (SELECT    'alter table '
+                     || owner
+                     || '.'
+                     || table_name
+                     || ' DISABLE CONSTRAINT '
+                     || constraint_name
+                     || ';' sql_string
+                FROM dba_constraints
+               WHERE constraint_type = 'R' AND owner = 'YOUR_SCHEMA')
+    LOOP
+        DBMS_OUTPUT.put_line (x.sql_string);
+ 
+        --EXECUTE IMMEDIATE x.sql_string;
+    END LOOP;
+END;
+ 
+BEGIN
+    FOR x IN (SELECT    'alter table '
+                     || owner
+                     || '.'
+                     || table_name
+                     || ' ENABLE CONSTRAINT '
+                     || constraint_name
+                     || ';' sql_string
+                FROM dba_constraints
+               WHERE constraint_type = 'R' AND owner = 'YOUR_SCHEMA')
+    LOOP
+        DBMS_OUTPUT.put_line (x.sql_string);
+ 
+        --EXECUTE IMMEDIATE x.sql_string;
+    END LOOP;
+END;

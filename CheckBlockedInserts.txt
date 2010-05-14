@@ -1,0 +1,40 @@
+-- Drop table
+drop table temp_pk_one;
+drop sequence temp_pk_one_seq;
+drop index temp_pk_one_item_idx;
+
+-- Create table
+create table temp_pk_one 
+( id         number(10) default 0 not null primary key,
+  temp_id    number(1) not null,
+  temp_id1   number(1) not null,
+  temp_desc  varchar2(40) not null,
+  temp_desc1 varchar2(40) not null
+);
+
+-- Create sequence
+CREATE SEQUENCE temp_pk_one_seq
+ START WITH     1
+ INCREMENT BY   1
+ NOCACHE
+ NOCYCLE; 
+ 
+-- Create Unique Index 
+CREATE UNIQUE INDEX temp_pk_one_item_idx
+  ON temp_pk_one (temp_id, temp_id1)
+  COMPUTE STATISTICS; 
+  
+
+-- Create the second table now.  
+create table temp_pk_two 
+( temp_id    number(1) not null,
+  temp_id1   number(1) not null,
+  temp_desc  varchar2(40) not null,
+  temp_desc1 varchar2(40) not null,
+  primary key ( temp_id, temp_id1 )
+);
+
+-- Insert statement for blocking
+insert into temp_pk_one values ( temp_pk_one_seq.nextval, 1, 2,'Temp key 1', 'Temp key 2' );
+                                 
+insert into temp_pk_two values ( 1, 2,'Temp key 1', 'Temp key 2' );

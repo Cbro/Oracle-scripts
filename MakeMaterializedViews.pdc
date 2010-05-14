@@ -1,0 +1,692 @@
+insert /*+append nologging*/ into mv_curr_artist_cnt_forever
+select a.id                                         artist_id,
+       acl.service_id                               service_id,
+       a.primary_genre_id                           primary_genre_id,
+       sum(acl.play_count)                          play_count,
+       count(acl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   artist_count_live acl,
+       artist a
+where  acl.artist_id     = a.id
+and    acl.period_kind   = 'DAY'
+group by a.id, acl.service_id, a.primary_genre_id;
+
+insert /*+append nologging*/ into mv_curr_customer_cnt_forever
+select c.id                                         customer_id,
+       c.service_id                                 service_id,
+       sum(ccl.play_count_myplaylist_other)                          play_count,
+       count(ccl.play_count_myplaylist_other)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   customer_count_live ccl,
+       customer c
+where  ccl.customer_id     = c.id  
+and    ccl.period_kind   = 'DAY'
+group by c.id, c.service_id;
+
+insert /*+append nologging*/ into mv_curr_playlist_cnt_forever
+select p.id                                         playlist_id,
+       p.service_id                                 service_id,
+       sum(pcl.play_count)                          play_count,
+       count(pcl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   playlist_count_live pcl,
+       playlist p
+where  pcl.playlist_id = p.id
+and    pcl.period_kind     = 'DAY'
+group by p.id, p.service_id;
+
+insert /*+append nologging*/ into mv_curr_track_cnt_forever
+select t.id                                         track_id,
+       tcl.service_id                               service_id,
+       nvl(t.primary_genre_id, r.primary_genre_id)  primary_genre_id,
+       sum(tcl.play_count)                          play_count,
+       count(tcl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   track_count_live tcl,
+       track t,
+       release r
+where  tcl.track_id     = t.id
+and    t.release_id     = r.id
+and    tcl.period_kind  = 'DAY'
+group by t.id, tcl.service_id, nvl(t.primary_genre_id, r.primary_genre_id);
+
+
+-------- ARTIST -----
+
+-- create the mview log on artist_count_live
+create materialized view log on artist_count_live with rowid, sequence (id, artist_id, service_id, period_start, play_count, period_kind) including new values;
+
+-- create the mview log on artist_count_live_aday
+create materialized view log on artist_count_live_aday with rowid, sequence (id, artist_id, service_id, period_start, play_count, period_kind) including new values;
+
+-- create the mview log on artist
+create materialized view log on artist with rowid, sequence (id, primary_genre_id ) including new values;
+
+-- create the mview for mv_curr_artist_cnt_forever
+create materialized view mv_curr_artist_cnt_forever
+on prebuilt table with reduced precision
+refresh fast on demand
+enable query rewrite
+as
+select a.id                                         artist_id,
+       acl.service_id                               service_id,
+       a.primary_genre_id                           primary_genre_id,
+       sum(acl.play_count)                          play_count,
+       count(acl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   artist_count_live acl,
+       artist a
+where  acl.artist_id     = a.id
+and    acl.period_kind   = 'DAY'
+group by a.id, acl.service_id, a.primary_genre_id;
+
+-- create the mview for mv_aged_artist_cnt_forever
+create materialized view mv_aged_artist_cnt_forever
+on prebuilt table with reduced precision
+refresh fast on demand
+enable query rewrite
+as
+select a.id                                         artist_id,
+       acl.service_id                               service_id,
+       a.primary_genre_id                           primary_genre_id,
+       sum(acl.play_count)                          play_count,
+       count(acl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   artist_count_live_aday acl,
+       artist a
+where  acl.artist_id     = a.id
+and    acl.period_kind   = 'DAY'
+group by a.id, acl.service_id, a.primary_genre_id;
+
+
+
+-- create the view that will join the m-views together
+create or replace view v_artist_count_forever as
+select v.artist_id,
+       v.service_id,
+       v.primary_genre_id,
+       sum(v.play_count) play_count
+from
+(
+select 'current'                                    umarker,
+       a.id                                         artist_id,
+       acl.service_id                               service_id,
+       a.primary_genre_id                           primary_genre_id,
+       sum(acl.play_count)                          play_count,
+       count(acl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   artist_count_live acl,
+       artist a
+where  acl.artist_id     = a.id
+and    acl.period_kind   = 'DAY'
+group by a.id, acl.service_id, a.primary_genre_id
+union all
+select 'aged'                                       umarker,
+       a.id                                         artist_id,
+       acl.service_id                               service_id,
+       a.primary_genre_id                           primary_genre_id,
+       sum(acl.play_count)                          play_count,
+       count(acl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   artist_count_live_aday acl,
+       artist a
+where  acl.artist_id     = a.id
+and    acl.period_kind   = 'DAY'
+group by a.id, acl.service_id, a.primary_genre_id
+) v
+group by v.artist_id, v.service_id, v.primary_genre_id;
+
+
+-- dbms_refres the views
+execute dbms_mview.refresh('mv_aged_artist_cnt_forever','F');
+execute dbms_mview.refresh('mv_curr_artist_cnt_forever','F');
+
+-------- CUSTOMER -----
+-- create the mview log on customer_count_live
+create materialized view log on customer_count_live with rowid, sequence (id, customer_id, period_start, PLAY_COUNT_MYPLAYLIST_OTHER, period_kind) including new values;
+
+-- create the mview log on customer_count_live_aday
+create materialized view log on customer_count_live_aday with rowid, sequence (id, customer_id, period_start, PLAY_COUNT_MYPLAYLIST_OTHER, period_kind) including new values;
+
+-- create the mview log on customer
+create materialized view log on customer with rowid, sequence (id, service_id ) including new values;
+
+
+
+-- create the mview for mv_curr_customer_cnt_forever
+create materialized view mv_curr_customer_cnt_forever
+on prebuilt table with reduced precision
+refresh fast on demand
+enable query rewrite
+as
+select c.id                                         customer_id,
+       c.service_id                                 service_id,
+       sum(ccl.play_count)                          play_count,
+       count(ccl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   customer_count_live ccl,
+       customer c
+where  ccl.customer_id     = c.id  
+and    ccl.period_kind   = 'DAY'
+group by c.id, c.service_id;
+
+
+
+-- create the mview for mv_aged_customer_cnt_forever
+create materialized view mv_aged_customer_cnt_forever
+on prebuilt table with reduced precision
+refresh fast on demand
+enable query rewrite
+as
+select c.id                                         customer_id,
+       c.service_id                                 service_id,
+       sum(ccl.play_count)                          play_count,
+       count(ccl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   customer_count_live_aday ccl,
+       customer c
+where  ccl.customer_id     = c.id  
+and    ccl.period_kind   = 'DAY'
+group by c.id, c.service_id;
+
+
+
+
+-- create the view that will join the m-views together
+create or replace view v_customer_count_forever as
+select v.customer_id,
+       v.service_id,
+       sum(v.play_count_myplaylist_other) play_count_myplaylist_other
+from
+(
+select 'current'                                    umarker,
+       mv_cl.customer_id,
+       mv_cl.service_id,
+       mv_cl.play_count_myplaylist_other
+from   mv_curr_customer_cnt_forever mv_cl
+union all
+select 'aged'                                    umarker,
+       mv_cla.customer_id,
+       mv_cla.service_id,
+       mv_cla.play_count_myplaylist_other
+from   mv_aged_customer_cnt_forever mv_cla
+) v
+group by v.customer_id, v.service_id;
+
+
+-- dbms_refresh complete the views
+execute dbms_mview.refresh('mv_aged_customer_cnt_forever','c');
+execute dbms_mview.refresh('mv_curr_customer_cnt_forever','c');
+
+-- fast refresh test
+execute dbms_mview.refresh('mv_aged_customer_cnt_forever','f');
+execute dbms_mview.refresh('mv_curr_customer_cnt_forever','f');
+
+
+
+
+-------- PLAYLIST -----
+
+-- create the mview log on playlist_count_live
+create materialized view log on playlist_count_live with rowid, sequence (id, playlist_id, period_start, play_count, period_kind) including new values;
+
+-- create the mview log on playlist_count_live_aday
+create materialized view log on playlist_count_live_aday with rowid, sequence (id, playlist_id, period_start, play_count, period_kind) including new values;
+
+-- create the mview log on playlist
+create materialized view log on playlist with rowid, sequence (id, service_id) including new values;
+
+
+-- create the mview for mv_curr_playlist_cnt_forever
+create materialized view mv_curr_playlist_cnt_forever
+on prebuilt table with reduced precision
+refresh fast on demand
+enable query rewrite
+as
+select p.id                                         playlist_id,
+       p.service_id                                 service_id,
+       sum(pcl.play_count)                          play_count,
+       count(pcl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   playlist_count_live pcl,
+       playlist p
+where  pcl.playlist_id = p.id
+and    pcl.period_kind     = 'DAY'
+group by p.id, p.service_id;
+
+
+-- create the mview for mv_aged_playlist_cnt_forever
+create materialized view mv_aged_playlist_cnt_forever
+on prebuilt table with reduced precision
+refresh fast on demand
+enable query rewrite
+as
+select c.id                                         playlist_id,
+       c.service_id                                 service_id,
+       sum(ccl.play_count)                          play_count,
+       count(ccl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   playlist_count_live_aday ccl,
+       playlist c
+where  ccl.playlist_id     = c.id  
+and    ccl.period_kind   = 'DAY'
+group by c.id, c.service_id;
+
+
+
+-- create the view that will join the m-views together
+create or replace view v_playlist_count_forever as
+select v.playlist_id,
+       v.service_id,
+       sum(v.play_count) play_count
+from
+(
+  select 'current'                                    umarker,
+         p.id                                         playlist_id,
+         p.service_id                                 service_id,
+         sum(pcl.play_count)                          play_count,
+         count(pcl.play_count)                        mv_count_1,
+         count(*)                                     mv_count_2
+  from   playlist_count_live pcl,
+         playlist p
+  where  pcl.playlist_id     = p.id  
+  and    pcl.period_kind   = 'DAY'
+  group by p.id, p.service_id
+  union all
+  select 'aged'                                       umarker,
+         p.id                                         playlist_id,
+         p.service_id                                 service_id,
+         sum(pcl.play_count)                          play_count,
+         count(pcl.play_count)                        mv_count_1,
+         count(*)                                     mv_count_2
+  from   playlist_count_live_aday pcl,
+         playlist p
+  where  pcl.playlist_id   = p.id  
+  and    pcl.period_kind   = 'DAY'
+  group by p.id, p.service_id
+) v
+group by v.playlist_id, v.service_id;
+
+
+-- dbms_refres the views
+execute dbms_mview.refresh('mv_aged_playlist_cnt_forever','f');
+execute dbms_mview.refresh('mv_curr_playlist_cnt_forever','f');
+
+-------- TRACK -----
+-- create the mview log on track_count_live
+create materialized view log on track_count_live with rowid, sequence (id, track_id, service_id, period_start, play_count, period_kind) including new values;
+
+-- create the mview log on track_count_live_aday
+create materialized view log on track_count_live_aday with rowid, sequence (id, track_id, service_id, period_start, play_count, period_kind) including new values;
+
+-- create the mview log on track
+create materialized view log on track with rowid, sequence (id, release_id, primary_genre_id ) including new values;
+
+-- create the mview log on release
+create materialized view log on release with rowid, sequence (id, primary_genre_id ) including new values;
+
+-- create the mview for mv_curr_track_cnt_forever
+create materialized view mv_curr_track_cnt_forever
+on prebuilt table with reduced precision
+refresh fast on demand
+enable query rewrite
+as
+select t.id                                         track_id,
+       tcl.service_id                               service_id,
+       nvl(t.primary_genre_id, r.primary_genre_id)  primary_genre_id,
+       sum(tcl.play_count)                          play_count,
+       count(tcl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   track_count_live tcl,
+       track t,
+       release r
+where  tcl.track_id     = t.id
+and    t.release_id     = r.id
+and    tcl.period_kind  = 'DAY'
+group by t.id, tcl.service_id, nvl(t.primary_genre_id, r.primary_genre_id);
+
+-- create the mview for mv_aged_track_cnt_forever
+create materialized view mv_aged_track_cnt_forever
+on prebuilt table with reduced precision
+refresh fast on demand
+enable query rewrite
+as
+select t.id                                         track_id,
+       tcl.service_id                               service_id,
+       nvl(t.primary_genre_id, r.primary_genre_id)  primary_genre_id,
+       sum(tcl.play_count)                          play_count,
+       count(tcl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   track_count_live_aday tcl,
+       track t,
+       release r
+where  tcl.track_id     = t.id
+and    t.release_id     = r.id
+and    tcl.period_kind  = 'DAY'
+group by t.id, tcl.service_id, nvl(t.primary_genre_id, r.primary_genre_id);
+
+-- create the view that will join the m-views together
+create or replace view v_track_count_forever as
+select v.track_id,
+       v.service_id,
+       v.primary_genre_id,
+       sum(v.play_count) play_count
+from
+(
+  select 'current'            umarker,
+         t.id                 track_id,
+         tc.service_id        service_id,
+         nvl(t.primary_genre_id, r.primary_genre_id) primary_genre_id,
+         sum(tc.play_count)   play_count
+  from   track_count_live tc,
+         track t,
+         release r
+  where  tc.track_id     = t.id
+  and    t.release_id    = r.id
+  and    tc.period_kind  = 'DAY'
+  group by t.id, tc.service_id, nvl(t.primary_genre_id, r.primary_genre_id)
+  union all
+  select 'aged'               umarker,
+         t.id                 track_id,
+         tc.service_id        service_id,
+         nvl(t.primary_genre_id, r.primary_genre_id) primary_genre_id,
+         sum(tc.play_count)   play_count
+  from   track_count_live_aday tc,
+         track t,
+         release r
+  where  tc.track_id     = t.id
+  and    t.release_id    = r.id
+  and    tc.period_kind  = 'DAY'
+  group by t.id, tc.service_id, nvl(t.primary_genre_id, r.primary_genre_id)
+) v
+group by v.track_id, v.service_id, v.primary_genre_id;
+
+
+-- dbms_refres the views
+execute dbms_mview.refresh('mv_aged_track_cnt_forever','f');
+execute dbms_mview.refresh('mv_curr_track_cnt_forever','f');
+
+
+
+
+
+
+
+
+
+----------------------------------------------------------  FOR TIMERS (Do Seperate) ----------------------------------------
+
+
+
+-- Drop the M-View
+drop materialized view mv_aged_artist_cnt_forever;
+
+-- Re-Create M-view
+create materialized view MV_AGED_ARTIST_CNT_FOREVER
+on prebuilt table with reduced precision 
+enable query rewrite
+as
+select a.id                                         artist_id,
+       acl.service_id                               service_id,
+       a.primary_genre_id                           primary_genre_id,
+       sum(acl.play_count)                          play_count,
+       count(acl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   artist_count_live_aday acl,
+       artist a
+where  acl.artist_id     = a.id
+and    acl.period_kind   = 'DAY'
+group by a.id, acl.service_id, a.primary_genre_id;
+
+
+-- Change refresh times
+alter materialized view MV_AGED_ARTIST_CNT_FOREVER 
+refresh fast start with sysdate next trunc(sysdate+1) + 12.5/24;
+
+-- Complete Refresh
+exec dbms_mview.refresh('MV_AGED_ARTIST_CNT_FOREVER','C');
+
+
+
+
+
+
+
+
+
+-- Drop the M-view
+drop materialized view mv_aged_customer_cnt_forever;
+
+-- Recreate the Mview
+create materialized view MV_AGED_CUSTOMER_CNT_FOREVER
+on prebuilt table with reduced precision 
+enable query rewrite
+as
+select c.id                                         customer_id,
+       c.service_id                                 service_id,
+       sum(ccl.play_count_myplaylist_other)                          play_count_myplaylist_other,
+       count(ccl.play_count_myplaylist_other)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   customer_count_live_aday ccl,
+       customer c
+where  ccl.customer_id     = c.id
+and    ccl.period_kind   = 'DAY'
+group by c.id, c.service_id;
+
+-- Change refresh times
+alter materialized view MV_AGED_CUSTOMER_CNT_FOREVER 
+refresh fast start with sysdate next trunc(sysdate+1) + 12.5/24;
+
+-- Complete Refresh
+exec dbms_mview.refresh('MV_AGED_CUSTOMER_CNT_FOREVER','C');
+
+
+
+
+
+
+-- Drop the M-view
+drop materialized view MV_AGED_PLAYLIST_CNT_FOREVER;
+
+-- Recreate M-view
+create materialized view MV_AGED_PLAYLIST_CNT_FOREVER
+on prebuilt table with reduced precision 
+enable query rewrite
+as
+select c.id                                         playlist_id,
+       c.service_id                                 service_id,
+       sum(ccl.play_count)                          play_count,
+       count(ccl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   playlist_count_live_aday ccl,
+       playlist c
+where  ccl.playlist_id     = c.id
+and    ccl.period_kind   = 'DAY'
+group by c.id, c.service_id;
+
+
+-- Change refresh times
+alter materialized view MV_AGED_PLAYLIST_CNT_FOREVER 
+refresh fast start with sysdate next trunc(sysdate+1) + 12.5/24;
+
+-- Complete Refresh
+exec dbms_mview.refresh('MV_AGED_PLAYLIST_CNT_FOREVER','C');
+
+
+
+
+
+
+
+
+
+-- Drop the M-view
+drop materialized view MV_AGED_TRACK_CNT_FOREVER;
+
+-- Recreate M-view
+create materialized view MV_AGED_TRACK_CNT_FOREVER
+on prebuilt table with reduced precision 
+enable query rewrite
+as
+select t.id                                         track_id,
+       tcl.service_id                               service_id,
+       nvl(t.primary_genre_id, r.primary_genre_id)  primary_genre_id,
+       sum(tcl.play_count)                          play_count,
+       count(tcl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   track_count_live_aday tcl,
+       track t,
+       release r
+where  tcl.track_id     = t.id
+and    t.release_id     = r.id
+and    tcl.period_kind  = 'DAY'
+group by t.id, tcl.service_id, nvl(t.primary_genre_id, r.primary_genre_id);
+
+-- Change refresh times
+alter materialized view MV_AGED_TRACK_CNT_FOREVER 
+refresh fast start with sysdate next trunc(sysdate+1) + 12.5/24;
+
+-- Complete Refresh
+exec dbms_mview.refresh('MV_AGED_TRACK_CNT_FOREVER','C');
+
+
+
+------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+-- Drop the M-view
+drop materialized view MV_CURR_ARTIST_CNT_FOREVER;
+
+-- Recreate M-view
+create materialized view MV_CURR_ARTIST_CNT_FOREVER
+on prebuilt table with reduced precision 
+enable query rewrite
+as
+select a.id                                         artist_id,
+       acl.service_id                               service_id,
+       a.primary_genre_id                           primary_genre_id,
+       sum(acl.play_count)                          play_count,
+       count(acl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   artist_count_live acl,
+       artist a
+where  acl.artist_id     = a.id
+and    acl.period_kind   = 'DAY'
+group by a.id, acl.service_id, a.primary_genre_id;
+
+-- Change refresh times
+alter materialized view MV_CURR_ARTIST_CNT_FOREVER 
+refresh fast start with sysdate next trunc(sysdate+1) + 11/24;
+
+
+-- Complete Refresh
+exec dbms_mview.refresh('MV_CURR_ARTIST_CNT_FOREVER','C');
+
+
+
+
+
+
+
+
+
+-- Drop the M-view
+drop materialized view MV_CURR_CUSTOMER_CNT_FOREVER;
+
+-- Recreate M-view
+create materialized view MV_CURR_CUSTOMER_CNT_FOREVER
+on prebuilt table with reduced precision 
+enable query rewrite
+as
+select c.id                                         customer_id,
+       c.service_id                                 service_id,
+       sum(ccl.play_count_myplaylist_other)         play_count_myplaylist_other,
+       count(ccl.play_count_myplaylist_other)       mv_count_1,
+       count(*)                                     mv_count_2
+from   customer_count_live ccl,
+       customer c
+where  ccl.customer_id     = c.id
+and    ccl.period_kind   = 'DAY'
+group by c.id, c.service_id;
+
+-- Change refresh times
+alter materialized view MV_CURR_CUSTOMER_CNT_FOREVER 
+refresh fast start with sysdate next trunc(sysdate+1) + 11.25/24;
+
+-- Complete Refresh
+exec dbms_mview.refresh('MV_CURR_CUSTOMER_CNT_FOREVER','C');
+
+
+
+
+
+
+-- Drop the M-view
+drop materialized view MV_CURR_PLAYLIST_CNT_FOREVER;
+
+-- Recreate M-view
+create materialized view MV_CURR_PLAYLIST_CNT_FOREVER
+on prebuilt table with reduced precision 
+enable query rewrite
+as
+select p.id                                         playlist_id,
+       p.service_id                                 service_id,
+       sum(pcl.play_count)                          play_count,
+       count(pcl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   playlist_count_live pcl,
+       playlist p
+where  pcl.playlist_id = p.id
+and    pcl.period_kind     = 'DAY'
+group by p.id, p.service_id;
+
+-- Change refresh times
+alter materialized view MV_CURR_PLAYLIST_CNT_FOREVER 
+refresh fast start with sysdate next trunc(sysdate+1) + 11.5/24;
+
+
+-- Complete Refresh
+exec dbms_mview.refresh('MV_CURR_PLAYLIST_CNT_FOREVER','C');
+
+
+
+
+
+-- Drop the M-view
+drop materialized view MV_CURR_TRACK_CNT_FOREVER;
+
+-- Recreate M-view
+create materialized view MV_CURR_TRACK_CNT_FOREVER
+on prebuilt table with reduced precision 
+enable query rewrite
+as
+select t.id                                         track_id,
+       tcl.service_id                               service_id,
+       nvl(t.primary_genre_id, r.primary_genre_id)  primary_genre_id,
+       sum(tcl.play_count)                          play_count,
+       count(tcl.play_count)                        mv_count_1,
+       count(*)                                     mv_count_2
+from   track_count_live tcl,
+       track t,
+       release r
+where  tcl.track_id     = t.id
+and    t.release_id     = r.id
+and    tcl.period_kind  = 'DAY'
+group by t.id, tcl.service_id, nvl(t.primary_genre_id, r.primary_genre_id);
+
+
+-- Change refresh times
+alter materialized view MV_CURR_TRACK_CNT_FOREVER 
+refresh fast start with sysdate next trunc(sysdate+1) + 11.75/24;
+
+-- Complete Refresh
+exec dbms_mview.refresh('MV_CURR_TRACK_CNT_FOREVER','C');
+
+

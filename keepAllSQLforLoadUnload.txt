@@ -1,0 +1,616 @@
+CREATE OR REPLACE PROCEDURE 
+--
+--  Module    : OMNI_LOAD_PROC 
+--  Author    : Manu Kaul
+--  Created    : 13/10/2008 10:34:05
+--  Purpose    : To load CSV files into local XE database for developers sandboxes
+--
+--  Revision History
+--
+--  Date         Who              Version          Details
+--  ===========  ===============  ===============  =======================================
+--  13/10/2008   Manu Kaul        V1.0.MKA.0.0     Initial Version
+--
+ OMNI_LOAD_PROC ( pSchemaOwner IN VARCHAR2 := 'MUSICSTATION',
+                  pDBDirectory IN VARCHAR2 := 'ORALOAD') 
+AUTHID CURRENT_USER AS
+ 
+  -- Local variables here
+  vLoadCount NUMBER;
+  c NUMBER;
+  ex    BOOLEAN;
+  flen  NUMBER;
+  bsize NUMBER; 
+ 
+  extTableString            VARCHAR2(32767) := NULL;
+  extColString              VARCHAR2(32767) := NULL;
+  extAccessParamString      VARCHAR2(32767) := NULL;
+ 
+  -- This is for one column
+  extOneColString            VARCHAR2(4000) := NULL;
+  extOneAccessParamString    VARCHAR2(4000) := NULL;
+  vTableWithCLOB             varchar2(35)   := NULL;
+  -- max Columns in table
+  vMaxCol                    NUMBER(10) := 0;
+  vExtRowCount               NUMBER(10) := 0;
+  
+  -- Ext Table Name
+  vExtTableName              VARCHAR2(30) := NULL;
+ 
+  -- Newline on Windows platform
+  l_str           VARCHAR2(5) := chr(13) || chr(10);
+  vExtExistsFlg   NUMBER(1)   := 0;
+  vTableExists    NUMBER(1)   := 0;
+begin
+     -- Disable all Constraints for tables
+     begin
+         <<disable_constraints_loop>>
+         FOR x IN (SELECT 'alter table '
+                         || c.table_name
+                         || ' DISABLE CONSTRAINT '
+                         || c.constraint_name
+                         || '' sql_string
+                    FROM user_constraints c,
+                         user_tables a,
+                         global_table_list gt
+                   WHERE a.table_name = c.table_name
+                   AND   a.table_name = gt.table_name
+                   AND   c.constraint_type = 'R'
+                   )
+        LOOP
+            EXECUTE IMMEDIATE x.sql_string;
+        END LOOP disable_constraints_loop;
+     exception
+        when others then
+             dbms_output.put_line('Discarded Error: '|| SQLCODE ||': ' ||substr(SQLERRM, 1, 100) );
+             null; -- Do nothing and continue with processing 
+     end;       
+
+
+  -- Loop through all the tables in the PDM only!
+  <<tables_loop>>
+  for tbl in (select a.table_name
+              from   all_tables a,
+                     global_table_list gt
+              where  a.table_name = gt.table_name
+              and    a.owner= pSchemaOwner
+              and    a.table_name not like 'DR$%'
+              and    a.table_name not in ( 'EVENT_OBJ' )  
+              order by a.table_name) loop
+ 
+   vTableWithCLOB := null;
+             -- Check to see if there is csv to import at all?
+            utl_file.fgetattr(pDBDirectory, upper(tbl.table_name)||'.csv', ex, flen, bsize);
+
+            IF ex THEN
+               vTableExists := 1;
+            ELSE
+               vTableExists := 0;
+            END IF; 
+
+-- dbms_output.put_line('vTableExists = '|| vTableExists);
+
+if( vTableExists = 1) then            
+
+      -- Phase I : Do a describe on each column of the tables in question
+        -- start to build the External Table String              
+      -- Get the max number of columns in the table  
+      select max(column_id) into vMaxCol from user_tab_columns where table_name = tbl.table_name;
+      vExtTableName := upper( 'X_'|| regexp_replace(tbl.table_name,'_','') );
+
+      extTableString := 'CREATE TABLE '|| vExtTableName ||' (' || l_str; 
+      
+       -- Get the column definitions
+       <<columns_loop>>
+       for col_x in ( select  a.COLUMN_ID,
+                              a.COLUMN_NAME,
+                              a.DATA_TYPE,
+                              a.DATA_PRECISION,
+                              a.DATA_SCALE,
+                              a.DATA_LENGTH,
+                              a.DEFAULT_LENGTH,
+                              a.CHARACTER_SET_NAME,
+                              a.CHAR_LENGTH,
+                              a.CHAR_USED
+                      from    user_tab_columns a
+                      where   table_name = tbl.table_name
+                      order by a.column_id )
+       loop
+         
+       
+            -- If its a NUMBER datatype, then format accordingly
+            if( upper(col_x.data_type) = 'NUMBER' )then
+                -- There exists a scale
+                if( col_x.data_scale is not null AND
+                    col_x.data_scale > 0 ) then
+                    extOneColString := 'NUMBER(' || col_x.data_precision ||','|| col_x.data_scale || '),' || l_str;   
+                else
+                    extOneColString := 'NUMBER(' || col_x.data_precision || '),' || l_str;
+                end if;
+               
+                -- Also build the access parameter string
+                extOneAccessParamString := 'CHAR(' || col_x.data_length * 2 || '),' || l_str;
+            end if; -- End of Number Checking!
+           
+            -- If its a VARCHAR2 datatype, then format accordingly
+            if( upper(col_x.data_type) = 'VARCHAR2' )then   
+                if( upper(col_x.char_used) = 'C' ) then
+                    extOneColString := 'VARCHAR2(' || col_x.char_length || ' CHAR),' || l_str;
+                else
+                    extOneColString := 'VARCHAR2(' || col_x.char_length || '),' || l_str;
+                end if;        
+                -- Also build the access parameter string
+                extOneAccessParamString := 'CHAR(' || col_x.data_length * 2 || '),' || l_str;
+
+            end if;
+           
+            -- If its a CHAR datatype, then format accordingly
+            if( upper(col_x.data_type) = 'CHAR' )then
+                if( upper(col_x.char_used) = 'C' ) then
+                    extOneColString := 'CHAR(' || col_x.char_length || ' CHAR),' || l_str;
+                else
+                    extOneColString := 'CHAR(' || col_x.char_length || '),' || l_str;
+                end if; 
+                -- Also build the access parameter string
+                extOneAccessParamString := 'CHAR(' || col_x.data_length * 2 || '),' || l_str;
+            end if;
+           
+            -- If its a FLOAT datatype, then format accordingly
+            if( upper(col_x.data_type) = 'FLOAT' )then
+                -- There exists a scale
+                if( col_x.data_scale is not null AND
+                    col_x.data_scale > 0 ) then
+                    extOneColString := 'FLOAT(' || col_x.data_precision ||','|| col_x.data_scale || '),' || l_str;   
+                else
+                    extOneColString := 'FLOAT(' || col_x.data_precision || '),' || l_str;
+                end if; 
+               -- Also build the access parameter string
+                extOneAccessParamString := 'CHAR(' || col_x.data_length * 2 || '),' || l_str;                
+            end if;
+           
+            -- If its a TIMESTAMP(3) datatype, then format accordingly
+            if( upper(col_x.data_type) like 'TIMESTAMP%' )then   
+                 extOneColString := col_x.data_type ||','|| l_str; 
+                 extOneAccessParamString := 'char date_format timestamp mask "DD-MON-YYYY HH24.MI.SSXFF", '  || l_str;     
+            end if;
+           
+            -- If its a DATE or CLOB leave it alone
+            if( upper(col_x.data_type) = 'DATE' or     
+                upper(col_x.data_type) = 'CLOB' ) then
+                extOneColString :=  col_x.data_type ||',' || l_str;  
+                if( upper(col_x.data_type) = 'CLOB') then
+                   extOneAccessParamString := 'CHAR(8000),' || l_str;
+                   vTableWithCLOB := tbl.table_name;
+                else
+                   extOneAccessParamString := 'DATE ''DD-MON-YYYY'', ' || l_str;  
+                end if;       
+            end if;
+               
+            -- After all the Checks done for data types now its time to append to the main string buffer
+            -- dbms_output.put_line('BEFORE = '|| extOneColString);
+           
+            -- Last column, trim off the , at the end
+            if( vMaxCol = col_x.column_id ) then
+                extOneColString := regexp_replace( extOneColString, ',','');
+                extOneAccessParamString := regexp_replace( extOneAccessParamString, ',','');    
+            end if;
+
+
+
+            extColString            := extColString ||'"' ||col_x.column_name ||'"  '|| extOneColString;
+            extAccessParamString    := extAccessParamString  ||'"' ||col_x.column_name ||'"  '|| extOneAccessParamString;
+            extOneColString         := null;                          -- Null out the string
+            extOneAccessParamString := null;                          -- Null out the string
+
+     
+      -- End of looping through columns
+      end loop columns_loop;
+             
+      -- Now append to the main table creation string
+      extTableString := extTableString || extColString ||')'|| l_str;  
+      extColString := null;                                   -- Null out the string
+     
+      -- Add the Organization, access parameters bit!
+      extTableString := extTableString || 'organization external ( type oracle_loader '|| l_str ||' default directory '|| pDBDirectory ||' access parameters ('|| l_str ;
+      extTableString := extTableString || 'RECORDS DELIMITED BY 0x''5E5E5E5E0D0A'' BADFILE ''x_'|| tbl.table_name ||'.bad'''|| l_str;
+      extTableString := extTableString || 'LOGFILE ''x_'|| tbl.table_name ||'.log'''|| l_str;
+      extTableString := extTableString || 'READSIZE 1048576 SKIP 1 FIELDS TERMINATED BY 0x''2C'' OPTIONALLY ENCLOSED BY 0x''7C7C'' LDRTRIM MISSING FIELD VALUES ARE NULL ' || l_str;
+      extTableString := extTableString || 'REJECT ROWS WITH ALL NULL FIELDS ( ' || l_str;
+     
+      -- Add the extAccessParamString here
+      extTableString := extTableString || extAccessParamString ||')'|| l_str;
+      extAccessParamString := null;
+      extTableString := extTableString || ') location ('''|| upper(tbl.table_name) ||'.csv'') ) reject limit unlimited ';
+     
+      -- Check to see if this table already exists, if it does go ahead and drop external table.
+      -- Exception Block
+      begin
+         
+          select 1   into vExtExistsFlg from user_tables where upper(table_name) = vExtTableName;
+          if( vExtExistsFlg = 1) then
+              execute immediate 'drop table '|| vExtTableName;
+          end if;    
+
+     exception
+        when no_data_found then
+             --dbms_output.put_line('Discarded Error: '|| SQLCODE ||': ' ||substr(SQLERRM, 1, 100) );
+             null; -- Do nothing and continue with processing 
+     end;       
+
+
+      -- Creates the external table from scratch
+      execute immediate extTableString;
+
+      -- Check to see what the count of rows in the external table to load data from is and display
+      execute immediate 'select count(*) from ' || vExtTableName 
+          into vLoadCount;
+      
+      -- Check if this count is zero, then there is no need to load the table's data
+      if (vLoadCount = 0) then
+          null;
+      else   
+             
+            -- Check to see if the external table is the same as target table
+            if( tbl.table_name = vTableWithCLOB ) then 
+                null;
+            else    
+                execute immediate   'select count(*) from (( select * from '||tbl.table_name||' minus select * from '||vExtTableName||' ) union all ( select * from '||vExtTableName||' minus select * from '||tbl.table_name||' ))' 
+                into  vExtRowCount; 
+            end if;
+            
+            -- Check to see if there are any changes and only then go ahead and refresh the DB
+            -- with the latest changes in the .csv file!    
+            if( vExtRowCount > 0) then
+              
+                -- At this point the External Table is filled up
+                --dbms_output.put_line('truncating -->'|| tbl.table_name);
+                execute immediate 'truncate table '|| tbl.table_name;
+               
+                -- Fill up the target table with the external table's content using DIRECT PATH INSERT Statement
+                dbms_output.put_line('Loading table -->'|| tbl.table_name);
+                execute immediate 'insert /*+ append nologging */ into '|| tbl.table_name ||' select * from '|| vExtTableName;
+            
+            end if;
+       
+       -- Display what got loaded
+       dbms_output.put_line( 'Loaded into Table Name = '|| rpad(tbl.table_name,35)||'... ('|| lpad(to_char(vExtRowCount),10) || ') rows' );
+       end if;
+                     
+      -- Drop the external table as it is not needed anymore.
+      execute immediate 'drop table '|| vExtTableName;
+      vExtRowCount := 0;
+     
+ end if;              -- End of if file exists in the table
+ 
+ -- End the table loop
+ end loop tables_loop;
+
+
+     -- Enable all Constraints for tables
+     begin
+         <<enable_constraints_loop>>
+         FOR x IN (SELECT 'alter table '
+                         || c.table_name
+                         || ' ENABLE CONSTRAINT '
+                         || c.constraint_name
+                         || '' sql_string
+                    FROM user_constraints c,
+                         user_tables a,
+                         global_table_list gt
+                   WHERE a.table_name = c.table_name
+                   AND   a.table_name = gt.table_name
+                   AND   c.constraint_type = 'R'
+                   )
+        LOOP
+             EXECUTE IMMEDIATE x.sql_string;
+        END LOOP enable_constraints_loop;
+     exception
+        when others then
+             dbms_output.put_line('Discarded Error: '|| SQLCODE ||': ' ||substr(SQLERRM, 1, 100) );
+             null; -- Do nothing and continue with processing 
+     end; 
+
+end OMNI_LOAD_PROC;
+/
+
+CREATE OR REPLACE PACKAGE
+--
+--  Module    : OMNI_UNLOAD_PKG (Spec)
+--  Author    : Manu Kaul
+--  Created   : 13/10/2008 10:34:05
+--  Purpose   : To unload local XE database into CSV files for developers sandboxes
+--
+--  Revision History
+--
+--  Date        Who             Version         Details
+--  =========== =============== =============== =======================================
+--  13/10/2008  Manu Kaul       V1.0.MKA.0.0    Initial Version
+--
+ OMNI_UNLOAD_PKG AS
+
+  --
+  function unload(p_query      in varchar2 default NULL,
+               p_cols       in varchar2 default '*',
+               p_town       in varchar2 default USER,
+               p_tname      in varchar2,
+               p_dbdir      in varchar2,
+               p_filename   in varchar2,
+               p_separator  in varchar2 default ',',
+               p_enclosure  in varchar2 default '||',
+               p_terminator in varchar2 default '^^^^',
+               p_header     in varchar2 default 'NO') return number;
+  --
+
+end omni_unload_pkg;
+/
+
+
+CREATE OR REPLACE PACKAGE BODY
+--
+--  Module    : OMNI_UNLOAD_PKG (Spec)
+--  Author    : Manu Kaul
+--  Created   : 13/10/2008 10:34:05
+--  Purpose   : To unload local XE database into CSV files for developers sandboxes
+--
+--  Revision History
+--
+--  Date        Who             Version         Details
+--  =========== =============== =============== =======================================
+--  13/10/2008  Manu Kaul       V1.0.MKA.0.0    Initial Version
+--
+ OMNI_UNLOAD_PKG AS
+  --
+  g_theCursor integer default dbms_sql.open_cursor;
+  g_descTbl   dbms_sql.desc_tab;
+
+  --
+  -- Function to convert characters to HEX characters! 
+  --
+  function to_hex(p_str in varchar2) return varchar2 is
+  begin
+    return to_char(ascii(p_str), 'fm0x');
+  end;
+
+  --
+  -- Function to qoute the values
+  -- 
+  function quote(p_str in varchar2, p_enclosure in varchar2) return varchar2 is
+  begin
+    return p_enclosure || replace(p_str,
+                                  p_enclosure,
+                                  p_enclosure || p_enclosure) || p_enclosure;
+  end;
+  --
+  --
+
+
+  --
+  -- Uses database directory to unload the values into a CSV formatted file
+  --
+  function unload(p_query      in varchar2 default NULL,
+               p_cols       in varchar2 default '*',
+               p_town       in varchar2 default USER,
+               p_tname      in varchar2,
+               p_dbdir      in varchar2,
+               p_filename   in varchar2,
+               p_separator  in varchar2 default ',',
+               p_enclosure  in varchar2 default '||',
+               p_terminator in varchar2 default '^^^^',
+               p_header     in varchar2 default 'NO') return number is
+    l_query        varchar2(4000);
+    l_output       utl_file.file_type;
+    l_columnValue  varchar2(4000);
+    l_colCnt       number default 0;
+    l_separator    varchar2(10) default '';
+    l_cnt          number default 0;
+    l_line         long;
+    l_datefmt      varchar2(255);
+    l_timestampfmt varchar2(255);
+  
+    l_descTbl dbms_sql.desc_tab;
+  begin
+    select value
+      into l_datefmt
+      from nls_session_parameters
+     where parameter = 'NLS_DATE_FORMAT';
+  
+    select value
+      into l_timestampfmt
+      from nls_session_parameters
+     where parameter = 'NLS_TIMESTAMP_FORMAT';
+  
+
+  
+    --
+    -- Set the date format to a big numeric string. Avoids
+    -- all NLS issues 
+    --
+    execute immediate 'alter session set nls_date_format=''DD-MON-YYYY'' ';
+    --
+    -- Set the timestamp format to a big numeric string. Avoids
+    -- all NLS issues and saves both the time and date.
+    --
+    execute immediate 'alter session set nls_timestamp_format =''DD-MON-YYYY HH24.MI.SSXFF'' ';
+
+  
+    --
+    -- Set up an exception block so that in the event of any
+    -- error, we can at least reset the date format back.
+    --
+    declare
+      invalid_type EXCEPTION;
+    begin
+      --
+      -- Parse and describe the query. We reset the
+      -- descTbl to an empty table so .count on it
+      -- will be reliable.
+      --
+      if p_query is NULL then
+        l_query := 'select ' || p_cols || ' from ' || p_town || '.' ||
+                   p_tname;
+      else
+        l_query := p_query;
+      end if;
+
+      --
+      dbms_sql.parse(g_theCursor, l_query, dbms_sql.native);
+      g_descTbl := l_descTbl;
+      dbms_sql.describe_columns(g_theCursor, l_colCnt, g_descTbl);
+
+    
+      --
+      -- Bind every single column to a varchar2(4000). We don't care
+      -- if we are fetching a number or a date or whatever.
+      -- Everything can be a string.
+      --
+      for i in 1 .. l_colCnt loop
+        dbms_sql.define_column(g_theCursor, i, l_columnValue, 4000);
+      end loop;
+      --
+      -- Run the query - ignore the output of execute. It is only
+      -- valid when the DML is an insert/update or delete.
+      --
+      l_cnt := dbms_sql.execute(g_theCursor);
+      --
+      -- Open the file to write output to and then write the
+      -- delimited data to it.
+      --
+      l_output := utl_file.fopen(p_dbdir, p_filename || '.csv', 'w', 32760);
+      --
+      -- Output a column header. This version uses table column comments if they
+      -- exist, otherwise it defaults to the actual table column name.
+      --
+      IF p_header = 'YES' THEN
+        l_separator := '';
+        l_line      := '';
+        for i in 1 .. g_descTbl.count loop
+          l_line      := l_line || l_separator || quote(g_descTbl(i).col_name,p_enclosure);                     
+          l_separator := p_separator;
+        end loop;
+        l_line := l_line || p_terminator;
+        utl_file.put_line(l_output, l_line);
+      END IF;
+      --
+      -- Output data
+      --
+      loop
+        exit when(dbms_sql.fetch_rows(g_theCursor) <= 0);
+        l_separator := '';
+        l_line      := null;
+        for i in 1 .. l_colCnt loop
+          dbms_sql.column_value(g_theCursor, i, l_columnValue);
+          l_line      := l_line || l_separator ||
+                         quote(l_columnValue, p_enclosure);
+          l_separator := p_separator;
+        end loop;
+        l_line := l_line || p_terminator;
+        utl_file.put_line(l_output, l_line);
+        l_cnt := l_cnt + 1;
+      end loop;
+      utl_file.fclose(l_output);
+      --
+      -- Now reset the date format and return the number of rows
+      -- written to the output file.
+      --
+      execute immediate 'alter session set nls_date_format=''' || l_datefmt || '''';
+      execute immediate 'alter session set nls_timestamp_format =''' ||
+                        l_timestampfmt || '''';
+
+      --
+      return l_cnt;
+    exception
+      --
+      -- In the event of ANY error, reset the data format and
+      -- re-raise the error.
+      --
+      when invalid_type then
+        execute immediate 'alter session set nls_date_format=''' ||
+                          l_datefmt || '''';
+        execute immediate 'alter session set nls_timestamp_format =''' ||
+                          l_timestampfmt || '''';
+
+        --
+        dbms_output.put_line('Error - Table: ' || p_tname ||
+                             ' contains an unsupported column type');
+        dbms_output.put_line('Table is being skipped');
+        --
+        return 0;
+      when utl_file.invalid_path then
+        execute immediate 'alter session set nls_date_format=''' ||
+                          l_datefmt || '''';
+        execute immediate 'alter session set nls_timestamp_format =''' ||
+                          l_timestampfmt || '''';
+
+        --
+        dbms_output.put_line('Invalid path name specified for dat file');
+        --
+        return 0;
+      when others then
+        execute immediate 'alter session set nls_date_format=''' ||
+                          l_datefmt || '''';
+        execute immediate 'alter session set nls_timestamp_format =''' ||
+                          l_timestampfmt || '''';
+
+        --
+        RAISE;
+        --
+        return 0;
+    end;
+  end unload;
+
+--
+--
+end omni_unload_pkg;
+/
+
+
+
+
+-- test windpws
+-- Created on 13/10/2008 by MKAUL 
+--SET LINESIZE 150;
+--SET SERVEROUTPUT on SIZE 1000000 FORMAT WRAPPED;
+
+declare 
+  -- Local variables here
+  l_rows    number;
+begin
+  -- Test statements here
+    
+  for tbl in ( select a.table_name 
+              from   all_tables a 
+              where  a.owner='TRASH' 
+              and    a.table_name not like 'DR$%'
+              and    a.table_name not in ( 'EVENT_OBJ' )   
+              order by a.table_name ) loop
+
+    l_rows := omni_unload_pkg.unload
+              ( p_cols       => '*',
+                p_town       => 'TRASH',
+                p_tname      => tbl.table_name,
+                p_dbdir      => 'ORALOAD',
+                p_filename   => tbl.table_name,
+                p_separator  => ',',
+                p_enclosure  => '||',
+                p_terminator => '^^^^',
+                p_header     => 'YES' );
+  --
+  dbms_output.put_line( 'Extracted from Table Name = '|| rpad(tbl.table_name,35)||'... ('|| lpad(to_char(l_rows),10) || ') rows' );
+ end loop; 
+  
+end;
+/
+
+
+-- Created on 13/10/2008 by MKAUL 
+declare 
+  -- Local variables here
+  i integer;
+begin
+  -- Test statements here
+  omni_load_proc(pSchemaOwner => 'TRASH',pDBDirectory => 'ORALOAD');
+end;
+/
+
+
+

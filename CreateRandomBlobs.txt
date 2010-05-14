@@ -1,0 +1,137 @@
+SQL> create or replace directory blobdir as '/mka_temp';
+Directory created
+ 
+SQL> GRANT read, write ON DIRECTORY blobdir TO musicstation;
+Grant succeeded
+
+insert into thang_jms_messages (messageid, destination, txid, txop, messageblob)
+values ( 1, 'xxx', 100, 'y', empty_blob());
+
+commit;
+
+( 100 KB File with random data )
+[oracle@blackbox mka_temp]$ dd if=/dev/urandom of=blob_100K.dat bs=1024 count=100 
+
+( 10 MB File with random data )
+[oracle@blackbox mka_temp]$ dd if=/dev/urandom of=blob_10M.dat bs=$(( 1024 * 1024 )) count=10  
+
+-- To make the package
+create or replace procedure GenerateBLOB(pDir IN VARCHAR2, pMessageID IN NUMBER) is
+
+  ablob  blob;
+  abfile bfile := bfilename(pDir, 'blob_1M.dat'); -- Get a pointer to the 1 MB file.
+  -- amount integer;
+  asize  integer;
+begin
+
+begin
+  --
+  -- Note: Above, the blobtab table was initialized with one entry. This
+  -- is needed because the PL/SQL BLOB locator (ablob) must point to a
+  -- specific EXISTING NON-NULL database BLOB. Also, the select statement
+  -- may only return one entry. If more than one row is returned
+  -- (more than one row with index_col set equal to 1), then the script
+  -- will fail.
+  --
+  select t.messageblob into ablob from thang_jms_messages t where t.messageid = pMessageID for update;
+
+  dbms_lob.fileopen(abfile);
+  asize := dbms_lob.getlength(abfile);
+  dbms_output.put_line('Size of input file: ' || asize);
+  
+  
+  dbms_lob.loadfromfile(ablob, abfile, asize);
+  
+  dbms_output.put_line('After loadfromfile');
+  asize := dbms_lob.getlength(ablob);
+  dbms_output.put_line('Size of blob: ' || asize);
+
+exception
+  when others then
+    dbms_output.put_line('An exception occurred');
+    dbms_output.put_line(sqlcode || sqlerrm);
+end;
+end GenerateBLOB;
+
+
+-- To execute the script
+begin
+  GenerateBLOB(pDir => 'BLOBDIR', pMessageID => 1 );
+end;
+
+
+-- To check blob size in the table
+SQL> select dbms_lob.getlength(t.messageblob) from thang_jms_messages t;
+ 
+DBMS_LOB.GETLENGTH(T.MESSAGEBL
+------------------------------
+                       1048576
+
+
+-- Inserting a brand new String into a CLOB
+declare
+  vClob clob := empty_clob();
+begin
+
+
+  insert into STORY_LANG
+    (story_id,
+     language,
+     local_story,
+     location,
+     short_title,
+     summary,
+     title,
+     is_small_body,
+     small_body,
+     large_body,
+     data_classification,
+     created,
+     modified)
+  values
+    ( 2566,
+     'en',
+     1,
+     null,
+     'Terms  Conditions',
+     'Terms Conditions',
+     'Terms Conditions',
+     0,
+     null,
+     empty_clob(),
+     330000,
+     TO_TIMESTAMP('09/09/2007 15:07:23.000', 'DD/MM/YYYY HH24:MI:SS.FF'),
+     TO_TIMESTAMP('10/07/2008 13:25:41.518', 'DD/MM/YYYY HH24:MI:SS.FF'))
+  returning large_body into vClob;
+
+
+  -- Start appending the text needed to the Large body. 
+  dbms_lob.append(vclob, 'Line 1: 1 something good');
+  dbms_lob.append(vclob, 'Line 2: 2 something good');
+  dbms_lob.append(vclob, 'Line 3: 3 something good');
+  dbms_lob.append(vclob, 'Line 4: 4 something good');
+  dbms_lob.append(vclob, 'Line 5: 5 something good');
+  dbms_lob.append(vclob, 'Line 6: 6 something good');
+  dbms_lob.append(vclob, 'Line 7: 7 something good');
+  
+
+end;
+/
+
+
+
+
+-- Update an existing CLOB and append string data to it
+
+declare
+  vClob clob := empty_clob();
+  vString varchar2(50) := 'Line 10: 100000 something good';
+begin
+
+select large_body into vClob from story_lang where story_id = 2566 for update;
+dbms_lob.append(vclob, vString);
+
+Update Story_Lang set large_body = vClob where story_id = 2566;
+  
+end;
+/

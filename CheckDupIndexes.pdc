@@ -1,0 +1,48 @@
+  SELECT  *
+   FROM
+   ( SELECT table_name,
+            index_name,
+            MAX(DECODE(p, 1,     c,NULL)) ||
+            MAX(DECODE(p, 2,', '||c,NULL)) ||
+            MAX(DECODE(p, 3,', '||c,NULL)) ||
+            MAX(DECODE(p, 4,', '||c,NULL)) ||
+            MAX(DECODE(p, 5,', '||c,NULL)) ||
+            MAX(DECODE(p, 6,', '||c,NULL)) ||
+            MAX(DECODE(p, 7,', '||c,NULL)) ||
+            MAX(DECODE(p, 8,', '||c,NULL)) ||
+            max(decode(p, 9,', '||c,NULL)) ||
+            max(decode(p,10,', '||c,NULL)) ||
+            max(decode(p,11,', '||c,NULL)) ||
+            max(decode(p,12,', '||c,NULL)) ||
+            max(decode(p,13,', '||c,NULL)) ||
+            max(decode(p,14,', '||c,NULL)) ||
+            max(decode(p,15,', '||c,NULL)) ||
+            max(decode(p,16,', '||c,NULL)) index_cols
+       FROM (SELECT table_name, index_name, SUBSTR(column_name,1,30) c, column_position p
+                  FROM USER_IND_COLUMNS )
+      GROUP BY table_name, index_name  ) A,
+   ( SELECT table_name,
+            index_name,
+            MAX(DECODE(p, 1,     c,NULL)) ||
+            MAX(DECODE(p, 2,', '||c,NULL)) ||
+            MAX(DECODE(p, 3,', '||c,NULL)) ||
+            MAX(DECODE(p, 4,', '||c,NULL)) ||
+            MAX(DECODE(p, 5,', '||c,NULL)) ||
+            MAX(DECODE(p, 6,', '||c,NULL)) ||
+            MAX(DECODE(p, 7,', '||c,NULL)) ||
+            MAX(DECODE(p, 8,', '||c,NULL)) ||
+            max(decode(p, 9,', '||c,NULL)) ||
+            max(decode(p,10,', '||c,NULL)) ||
+            max(decode(p,11,', '||c,NULL)) ||
+            max(decode(p,12,', '||c,NULL)) ||
+            max(decode(p,13,', '||c,NULL)) ||
+            max(decode(p,14,', '||c,NULL)) ||
+            max(decode(p,15,', '||c,NULL)) ||
+            max(decode(p,16,', '||c,NULL)) index_cols            
+       FROM (SELECT table_name, index_name, SUBSTR(column_name,1,30) c, column_position p
+                  FROM USER_IND_COLUMNS )
+      GROUP BY table_name, index_name  ) B
+         WHERE a.table_name = b.table_name
+           AND a.index_name <> b.index_name
+           AND a.index_cols LIKE b.index_cols || '%'
+      order by a.table_name;

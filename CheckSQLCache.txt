@@ -1,0 +1,71 @@
+SQL> create table temp as select * from all_objects;
+Table created
+(Default at this point is EXACT)
+SQL> select count(*) from temp where object_type = 'PACKAGE';
+COUNT(*)
+----------
+719
+SQL> select count(*) from temp where object_type = 'TABLE';
+COUNT(*)
+----------
+1377
+SQL> select count(*) from temp where object_type = 'VIEW';
+COUNT(*)
+----------
+2976
+SQL> select sql_text from v$sql where sql_text like ' select count(*) from temp%';
+SQL_TEXT
+--------------------------------------------------------------------------------
+select count(*) from temp where object_type = 'TABLE'
+select count(*) from temp where object_type = 'PACKAGE'
+select count(*) from temp where object_type = 'VIEW'
+(You find three copies sitting in the sql cache!!!)
+SQL> alter session set cursor_sharing = 'SIMILAR';
+Session altered
+SQL> select count(*) CNT_SIMILAR from temp where object_type = 'VIEW';
+CNT_SIMILAR
+-----------
+2976
+SQL> select count(*) CNT_SIMILAR from temp where object_type = 'TABLE';
+CNT_SIMILAR
+-----------
+1377
+SQL> select count(*) CNT_SIMILAR from temp where object_type = 'PACKAGE';
+CNT_SIMILAR
+-----------
+719
+SQL> select sql_text from v$sql where sql_text like ' select count(*)%';
+SQL_TEXT
+--------------------------------------------------------------------------------
+select count(*) from temp where object_type = 'TABLE'
+select count(*) from temp where object_type = 'PACKAGE'
+select count(*) from temp where object_type = 'VIEW'
+select count(*) CNT_SIMILAR from temp where object_type = :"SYS_B_0"
+select count(*) CNT_SIMILAR from temp where object_type = :"SYS_B_0"
+select count(*) CNT_SIMILAR from temp where object_type = :"SYS_B_0"
+6 rows selected
+SQL> alter session set cursor_sharing = 'FORCE';
+Session altered
+SQL> select count(*) CNT_FORCE from temp where object_type = 'PACKAGE';
+CNT_FORCE
+----------
+719
+SQL> select count(*) CNT_FORCE from temp where object_type = 'TABLE';
+CNT_FORCE
+----------
+1377
+SQL> select count(*) CNT_FORCE from temp where object_type = 'INDEX';
+CNT_FORCE
+----------
+2507
+SQL> select sql_text from v$sql where sql_text like ' select count(*)%';
+SQL_TEXT
+--------------------------------------------------------------------------------
+select count(*) from temp where object_type = 'TABLE'
+select count(*) from temp where object_type = 'PACKAGE'
+select count(*) from temp where object_type = 'VIEW'
+select count(*) CNT_FORCE from temp where object_type = :"SYS_B_0"
+select count(*) CNT_SIMILAR from temp where object_type = :"SYS_B_0"
+select count(*) CNT_SIMILAR from temp where object_type = :"SYS_B_0"
+select count(*) CNT_SIMILAR from temp where object_type = :"SYS_B_0"
+7 rows selected

@@ -1,0 +1,40 @@
+alter session set nls_date_format = 'DD-MON-YYYY HH24:MI:SS';
+
+-- Times of the files to check which ones to pick up
+select to_char(first_time,'dd-mon-yyyy hh24:mi:ss'),name 
+from   v$archived_log 
+where  first_time >= to_date('29-may-2008 09:00:00','dd-mon-yyyy hh24:mi:ss');
+
+-- Add the Logfiles
+execute dbms_logmnr.add_logfile(LogFileName => '/u21/flash_recovery_area/PIANO/archivelog/2008_05_29/o1_mf_3_20620_43xh3nhp_.arc', Options => dbms_logmnr.NEW);
+execute dbms_logmnr.add_logfile(LogFileName => '/u21/flash_recovery_area/PIANO/archivelog/2008_05_29/o1_mf_2_52905_43xhdj3m_.arc', Options => dbms_logmnr.ADDFILE);
+execute dbms_logmnr.add_logfile(LogFileName => '/u21/flash_recovery_area/PIANO/archivelog/2008_05_29/o1_mf_3_20621_43xhovmt_.arc', Options => dbms_logmnr.ADDFILE);
+execute dbms_logmnr.add_logfile(LogFileName => '/u21/flash_recovery_area/PIANO/archivelog/2008_05_29/o1_mf_2_52906_43xhqhbh_.arc', Options => dbms_logmnr.ADDFILE);
+execute dbms_logmnr.add_logfile(LogFileName => '/u21/flash_recovery_area/PIANO/archivelog/2008_05_29/o1_mf_1_52544_43xj3ktj_.arc', Options => dbms_logmnr.ADDFILE);
+
+-- Check if the logfiles were added succesfully
+select * from v$logmnr_logs;
+
+-- Start the Logminer -- + DBMS_LOGMNR.CONTINUOUS_MINE );
+EXECUTE dbms_logmnr.start_logmnr(Options => DBMS_LOGMNR.DICT_FROM_ONLINE_CATALOG + DBMS_LOGMNR.PRINT_PRETTY_SQL ); 
+
+-- Create a new table which will get the contents of V$LOGMNR_CONTENTS
+create table mka_logger as select * from v$logmnr_contents where username in ('MUSICSTATION');
+
+
+-- Query the V$LOGMNR_CONTENTS view to see what is meaningful
+
+create table mka_logger as 
+select username as USR,
+       timestamp,
+       commit_timestamp,
+       (xidusn || '.' || xidslt || '.' || xidsqn ) as XID,
+       sql_redo,
+       sql_undo,
+       table_name,
+       session#
+from   v$logmnr_contents 
+where  username in ('MUSICSTATION');       
+
+-- Stop the Logminer
+execute dbms_logmnr.end_logmnr();       

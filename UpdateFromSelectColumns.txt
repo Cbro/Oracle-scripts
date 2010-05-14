@@ -1,0 +1,13 @@
+UPDATE artist_data t
+   SET (t.calculated_rating, t.calculated_rating_date, t.modified) = (select x.calculated_rating,
+                                                                             x.calculated_rating_date,
+                                                                             sysdate
+                                                                        from tmp_artist_data x
+                                                                       where x.artist_id =
+                                                                             t.artist_id
+                                                                         and x.service_id =
+                                                                             t.service_id)
+ WHERE EXISTS (select 'x'
+          from tmp_artist_data y
+         where y.artist_id = t.artist_id
+           and y.service_id = t.service_id);

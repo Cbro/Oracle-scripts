@@ -1,0 +1,45 @@
+
+
+exec dbms_redefinition.can_redef_table('MUSICSTATION','JMS_ROLES', dbms_redefinition.cons_use_rowid );
+-- create table musicstation.jms_messages_tmp as select * from musicstation.jms_messages where 1=0;
+create table MUSICSTATION.JMS_ROLES_INTERIM
+(
+  ROLEID VARCHAR2(32) ,
+  USERID VARCHAR2(32) 
+)
+tablespace MKA_TEST_TS
+  pctfree 10
+  initrans 1
+  maxtrans 255
+  storage
+  (
+    initial 64K
+    minextents 1
+    maxextents unlimited
+  );
+
+exec dbms_redefinition.start_redef_table('MUSICSTATION','JMS_ROLES','JMS_ROLES_INTERIM', null, dbms_redefinition.cons_use_rowid);
+
+-- MAKE SURE YOU ADD IN ALL THE CONSTRAINTS AND INDEXES HERE!!
+-- **********************************************************************
+-- **********************************************************************
+-- **********************************************************************
+--
+declare 
+  vErrors INTEGER := 0;
+begin
+ dbms_redefinition.copy_table_dependents(uname => 'MUSICSTATION', orig_table => 'JMS_ROLES', int_table => 'JMS_ROLES_INTERIM', copy_indexes => dbms_redefinition.cons_orig_params, num_errors => vErrors);
+end;
+
+-- Apply captured changed to interim table
+exec dbms_redefinition.sync_interim_table('MUSICSTATION', 'JMS_ROLES', 'JMS_ROLES_INTERIM');
+
+-- Complete the redefinition 
+exec dbms_redefinition.finish_redef_table('MUSICSTATION','JMS_ROLES','JMS_ROLES_INTERIM');
+
+-- Drop Interim Table
+drop table musicstation.JMS_ROLES_INTERIM;
+
+
+
+-- alter table MUSICSTATION.JMS_MESSAGES move tablespace THANG_TAB_TS;  
